@@ -1,0 +1,1 @@
+export PYTHONPATH=/${SCRATCH}/final-project-group_27/
