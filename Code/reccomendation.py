@@ -1,20 +1,23 @@
 
-#most popular recommendation as a baseline
-#given a df indexed by user (should be Joby's format), aggregate all movie ratings
-#then report the movie with highest average rating
-#optional cutoff for minimum number of reviews to be incorporated into main
-
+#Imports
 import sys
 import pandas as pd
 
+
+#Class to be imported
 class ReccomendationSystem:
-    def __init__(self, data=None, min_reviews=None) -> None:
-        self.min_reviews = min_reviews
-        self.data = data
+    def __init__(self, data=None, method=None, min_reviews=None, bias = 1) -> None:
+        self.method = method                                                #Specifies what type of Reccomendation to use i.e. Baseline
+        self.min_reviews = min_reviews                                      #Min number of reviews necessary for a point to be recommended
+        self.data = data                                                    #Dataframe passed through Q: Update in place?
+        self.bias = bias                                                    #Bias to use on metrics
         #Some other args...
 
     #Maybe have a recommend method that does some behavior based on args passed through
     def reccomend(self):
+        """
+        Method that should include most behavior pased on parameters passed through to the ReccomendationSystem object
+        """
         # self.condense_popularity()
         # self.min_review_cutoff()
         # self. some behavior...
@@ -42,9 +45,7 @@ class ReccomendationSystem:
 
     def min_review_cutoff(self):
         """
-        input_dataFrame: output of condense popularity
-        min_reviews: int, minimum number of reviews to be considered for recommendation
-
+        Only recommend most popular movies with a certain number of reviews.
         """
 
         #drop movies with too few reviews
