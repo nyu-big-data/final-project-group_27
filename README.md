@@ -8,6 +8,8 @@
 
 # Overview
 
+change
+
 In the final project, you will apply the tools you have learned in this class to solve a realistic, large-scale applied problem.
 Specifically, you will build and evaluate a collaborative-filter based recommender system. 
 
