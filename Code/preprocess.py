@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import os
 import dask
+import contstants as const
+
 # And pyspark.sql to get the spark session
 # from pyspark.sql import SparkSession
 
@@ -12,8 +14,7 @@ class DataPreprocessor():
     def __init__(self, file_path) -> None:
         self.file_path = file_path                      #File Path to Read in Data
         self.working_dir = os.getcwd()                  #Get Current Working Directory
-        self.tags = ['movies.csv','ratings.csv',        #4 DIfferent files you need
-                    'tags.csv','links.csv']
+        self.csv_names = const.CSV_NAME_LIST            #Grab csv names List like: ['rationgs.csv','tags.csv'...]
 
     def clean_data(self):
         #Format Date Time
@@ -23,3 +24,5 @@ class DataPreprocessor():
         #
         
         pass
+
+#Some change
