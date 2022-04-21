@@ -8,9 +8,10 @@ import sys
 import pandas as pd
 
 class ReccomendationSystem:
-    def __init__(self, data=None, min_reviews=None) -> None:
+    def __init__(self, data=None, min_reviews=None, keepNum) -> None:
         self.min_reviews = min_reviews
         self.data = data
+        self.keepNum = keepNum
         #Some other args...
 
     #Maybe have a recommend method that does some behavior based on args passed through
@@ -48,9 +49,10 @@ class ReccomendationSystem:
         """
 
         #drop movies with too few reviews
-        arg_max = self.data.where(self.data["num_reviews"]>=self.min_reviews).idxmax(axis = 0)["average_rating"]
+        filtered = self.data.where(self.data["num_reviews"]>=self.min_reviews).dropna()[["movie"],["average_rating"]]
 
-        return self.data.loc[arg_max]["movie"]
+        #return the first self.keepNum titles
+        return filtered.sort_values(by = "average_rating", ascending = False)["movie"][:self.keepNum].tolist()
 
     def fastmax(self):
         """
@@ -59,6 +61,7 @@ class ReccomendationSystem:
         outputs: movie with the highest ave rating
         """
 
-        return self.data.mean().argmax()
+        #return first n most popular movies
+        return self.data.mean().sort(ascending = False).index()[:self.keepNum]
 
 
