@@ -15,7 +15,7 @@ def main(spark, filepath_arg):
     filepath = const.DATASET_DICT[filepath_arg]
     print(f"filepath_arg: {filepath_arg} file_path: {filepath}")
     
-    data = DataPreprocessor(spark,filepath_arg)
+    data = DataPreprocessor(spark,filepath)
     data.delete_dupe_ids()
     
     #Ideally Preprocess Data Something Like this:
