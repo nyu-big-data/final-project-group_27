@@ -3,6 +3,9 @@ import pandas as pd
 import os
 import dask
 import code.constants as const
+import pyspark
+from pyspark.sql import SparkSession
+
 # And pyspark.sql to get the spark session
 # from pyspark.sql import SparkSession
 

@@ -2,10 +2,10 @@
 from code.preprocess import DataPreprocessor
 import code.constants as const
 import sys
+from pyspark.sql import SparkSession
 
 
-
-def main(filepath_arg):
+def main(spark, filepath_arg):
     """
     This program should be ran from the command line with an argument of what dataset to run on.
     The program will complete the code inside the main block below, and output train,val, and test sets into the Data_Partitions Folder.
@@ -28,11 +28,7 @@ def main(filepath_arg):
 # Only enter this block if we're in main
 if __name__ == "__main__":
 
-    # Create the spark session object
-    #spark = SparkSession.builder.appName('part1').getOrCreate()
-
-    # Get user netID from the command line
-    #netID = getpass.getuser()
-
-    # Call our main routine
-    main(sys.argv[1]) #Either 'small' or 'large' should be passed through
+    #Initalize spark session
+    spark = SparkSession.builder.appName('Spark_Session_Name').getOrCreate()
+    main(spark, sys.argv[1]) #Either 'small' or 'large' should be passed through
+   
