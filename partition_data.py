@@ -14,8 +14,10 @@ def main(spark, filepath_arg):
     #Grab releveant file path
     filepath = const.DATASET_DICT[filepath_arg]
     print(f"filepath_arg: {filepath_arg} file_path: {filepath}")
-    #data = DataProcessor(filepath_arg)
-
+    
+    data = DataPreprocessor(spark,filepath_arg)
+    data.delete_dupe_ids()
+    
     #Ideally Preprocess Data Something Like this:
     print(f"Cleaning the {filepath_arg} dataset")
     #data.clean_data()
