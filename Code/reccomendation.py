@@ -6,19 +6,10 @@ import pandas as pd
 
 #Class to be imported
 class ReccomendationSystem:
-<<<<<<< HEAD
-    def __init__(self, data=None, min_reviews=None, keepNum) -> None:
+    def __init__(self, data=None, min_reviews=None, keepNum=None) -> None:
         self.min_reviews = min_reviews
         self.data = data
         self.keepNum = keepNum
-=======
-    def __init__(self, data=None, method=None, min_reviews=None, bias = 1) -> None:
-        self.method = method                                                #Specifies what type of Reccomendation to use i.e. Baseline
-        self.min_reviews = min_reviews                                      #Min number of reviews necessary for a point to be recommended
-        self.data = data                                                    #Dataframe passed through Q: Update in place?
-        self.bias = bias                                                    #Bias to use on metrics
->>>>>>> 587ac63db90e27817331c6a486b7f1ff41b72b9b
-        #Some other args...
 
     #Maybe have a recommend method that does some behavior based on args passed through
     def reccomend(self):
@@ -72,3 +63,4 @@ class ReccomendationSystem:
         return self.data.mean().sort(ascending = False).index()[:self.keepNum]
 
 
+#Some change
