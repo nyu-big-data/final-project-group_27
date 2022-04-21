@@ -41,11 +41,11 @@ class DataPreprocessor():
         """
 
         #Import the moveies data + add to schema so it can be used by SQL
-        movies = pyspark.read.csv(self.file_path + 'movies.csv', schema='movieId INT, title STRING, genres STRING')
-        movies.boats.createOrReplaceTempView('movies')
+        movies = self.spark.read.csv(self.file_path + 'movies.csv', schema='movieId INT, title STRING, genres STRING')
+    
         #Same for ratings
-        ratings = pyspark.read.csv(self.file_path + 'ratings.csv', schema='userId INT, movieId INT, rating FLOAT, timestamp DATETYPE') #Date type?
-        ratings.boats.createOrReplaceTempView('ratings') 
+        ratings = self.spark.read.csv(self.file_path + 'ratings.csv', schema='userId INT, movieId INT, rating FLOAT, timestamp DATETYPE') #Date type?
+        
 
         #Combine or ditch reviews that have dupes?
         double_counts = movies.groupby('title').count()
