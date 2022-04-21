@@ -1,6 +1,6 @@
 #Import a bunch of things
 from code.preprocess import DataProcessor
-import code.contstants as const
+import code.constants as const
 import sys
 
 
@@ -12,7 +12,7 @@ def main(filepath_arg):
     The code Will run off of the code in data_preprocessor
     """
     #Grab releveant file path
-    filepath = const.data_set_dict[filepath_arg]
+    filepath = const.DATASET_DICT[filepath_arg]
     print(f"filepath_arg: {filepath_arg} file_path: {filepath}")
     #data = DataProcessor(filepath_arg)
 

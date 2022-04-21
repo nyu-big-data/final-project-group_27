@@ -2,8 +2,7 @@ import numpy as np
 import pandas as pd
 import os
 import dask
-import contstants as const
-
+from . import contstants as const
 # And pyspark.sql to get the spark session
 # from pyspark.sql import SparkSession
 
