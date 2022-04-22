@@ -16,10 +16,7 @@ def main(spark, dataset_size):
     
     #Initialize DataPreprocessor Object
     data = DataPreprocessor(spark,filepath)
-    
-    #THIS IS A TEST - REMOVE LATER
-    data.preprocess()                   
-
+               
     #Ideally Preprocess Data Something Like this:
     print(f"file_path: {filepath}")
 
@@ -36,6 +33,10 @@ def main(spark, dataset_size):
     test.write.csv(f"{const.SAVE_FILE_PATH}{dataset_size}_test")
     print("Finished Saving")
     #Let us know when its done
+
+    #THIS IS A TEST - REMOVE LATER
+    data.preprocess()        
+    
     print(f"Done for dataset {filepath}")
 
 # Only enter this block if we're in main
