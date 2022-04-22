@@ -6,7 +6,7 @@ import dask
 import code.constants as const
 import pyspark
 from pyspark.sql import SparkSession
-
+from pyspark.sql.functions import *
 # And pyspark.sql to get the spark session
 # from pyspark.sql import SparkSession
 
@@ -38,16 +38,24 @@ class DataPreprocessor():
         outputs: deduped_ratings_df, deduped_movies_df
         """
 
-        #Import the moveies data + add to schema so it can be used by SQL
-        movies = self.spark.read.csv(self.file_path + 'movies.csv', schema='movieId INT, title STRING, genres STRING')
+        #Import the movies data + add to schema so it can be used by SQL + header=True because there's a header
+        movies = self.spark.read.csv(self.file_path + 'movies.csv', header=True, \
+                                    schema='movieId INT, title STRING, genres STRING')
     
-        #Same for ratings
-        ratings = self.spark.read.csv(self.file_path + 'ratings.csv', schema='userId INT, movieId INT, rating FLOAT, timestamp DATE') #Date type?
+        #Same for ratings - TIMESTAMP MUST BE STRING
+        ratings = self.spark.read.csv(self.file_path + 'ratings.csv', header=True, \
+                    schema='userId INT, movieId INT, rating FLOAT, timestamp STRING') 
         
-        #Combine or ditch reviews that have dupes?
-        double_counts = movies.groupby('title').count()
-        print(double_counts)
+        #Get the MM-dd-yyyy format for timestamp values producing new column, Date
+        ratings = ratings.withColumn("date",from_unixtime(col("timestamp"),"MM-dd-yyyy"))
+        ratings = ratings.drop("timestamp") #Drop timestamp, we now have date
 
+        #Join Dfs - Join Movies with Ratings on movieId, LEFT JOIN used, select only rating, userId, movieId, title and date
+        joined = ratings.join(movies, ratings.movieId==movies.movieId, how='left').select(\
+                            ratings.rating,ratings.userId,\
+                            ratings.movieId,ratings.date,movies.title)
+        #Find Movie Titles that map to multiple IDs
+        dupes = joined.groupby("title").agg(countDistinct("movieId").alias("countD")).filter(col("countD")>1).select("title")
         #step 1 identify movie titles with multiple ids 
         # g = movies_df.groupby('title').movieId.count()>1
         #step make a list of movie titles with more than one movieId 
