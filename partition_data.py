@@ -27,16 +27,16 @@ def main(spark, dataset_size):
     #THIS IS A TEST - REMOVE LATER - Call train/test/val splits
     train, val, test = data.create_train_val_test_splits(clean_data=clean_data)
     #Output Train/Test/Val Splits into Data_partitions
-    print(f"Saving train/val/test splits to {const.SAVE_FILE_PATH}")
-    train.write.csv(f"{const.SAVE_FILE_PATH}{dataset_size}_train")
-    val.write.csv(f"{const.SAVE_FILE_PATH}{dataset_size}_small_val")
-    test.write.csv(f"{const.SAVE_FILE_PATH}{dataset_size}_test")
+    print(f"Saving train/val/test splits to {const.HPC_DATA_FILEPATH}")
+    train.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_train")
+    val.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_small_val")
+    test.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_test")
     print("Finished Saving")
     #Let us know when its done
 
     #THIS IS A TEST - REMOVE LATER
     data.preprocess()        
-    
+
     print(f"Done for dataset {filepath}")
 
 # Only enter this block if we're in main
