@@ -112,7 +112,7 @@ class DataPreprocessor():
         output: a sparse utility matrix, where rows are user ids and columns are movie titles
         """
         #Type Cast the cols to numeric
-        ratings = ratings.withColumn('movieId',col('movieId').cast(IntegerType())).withColumn("userId",col("userId").cast(IntegerType()))
+        ratings = clean_data.withColumn('movieId',col('movieId').cast(IntegerType())).withColumn("userId",col("userId").cast(IntegerType()))
         #Drop nulls
         ratings = ratings.na.drop("any")
         #Create training, val, test splits
