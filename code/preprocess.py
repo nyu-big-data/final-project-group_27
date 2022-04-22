@@ -5,6 +5,9 @@ import pyspark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.window import Window
+from pyspark.ml.evaluation import RegressionEvaluator
+from pyspark.ml.recommendation import ALS
+from pyspark.sql import Row
 
 # And pyspark.sql to get the spark session
 # from pyspark.sql import SparkSession
@@ -17,24 +20,34 @@ class DataPreprocessor():
         self.spark = spark
         self.file_path = file_path                      #File Path to Read in Data
 
-    def clean_data(self):
+    def preprocess(self):
+        """
+        Goal: Save train/val/test splits to netID/scratch - all using self methods
+        Step 1: self.clean_data: clean the data, format timestamp to date, and remove duplicate movie titles
+        Step 2: self.create_train_val_test_splits: reformats data, drops nans, and returns train,val and test splits
+        """
         #Format Date Time
 
-        #Fix Duplicates
-
-        #
+        #Deduplicate Data
+        clean_data = self.clean_data()            #No args need to be passed, returns RDD of joined data (movies,ratings), without duplicates
+        #Get Utility Matrix
+        train, val, test = self.create_train_val_test_splits(clean_data)
+        #Fit and run model
+        top_100_movie_recs, top_100_user_recs = self.fit_and_run(train,val,test)        #Need to figure out how to get val set in there TO DO
         
-        pass
+        #Return top 100 recs for movies / users
+        return top_100_movie_recs, top_100_user_recs
     
-    def delete_dupe_ids(self):
+    def clean_data(self):
         """
         goal: for movie titles with multiple movieIDs, in the movies dataset,
         remove the duplicate IDs with the least ratings for each movie. 
         Additionally, remove those IDs from the ratings dataset, so we get a 1:1 mapping
         between movie title and movie ID
 
-        inputs: ratings_df, movies_df
-        outputs: deduped_ratings_df, deduped_movies_df
+        inputs: None, however - self.file_path -> this should link to your hfs/netid/
+        outputs: all_data - a RDD of joined data (movies,reviews) - deduplicated of titles that appear more than once
+                this loses only 6 records (reviews from users) for small
         """
 
         #Import the movies data + add to schema so it can be used by SQL + header=True because there's a header
@@ -85,79 +98,45 @@ class DataPreprocessor():
 
         #For testing purposes should be 100,830
         print(f"The length of the combined and de-deduped joined data-set is: {len(all_data.collect())}")
-        #Return all_data
+
+        #Drop nulls
+
+        #Return all_data -> Type: Spark RDD Ready for more computation
         return all_data
 
-    def create_utility_matrix(self,deduped_ratings_df,deduped_movies_df):
+    def create_train_val_test_splits(self, clean_data):
         """
-        input: deduped movies and ratings df, meaning title and movieId map 1:1
-        and all duplicative movieIds have been removed from ratings_df
-
-        returns: a sparse utility matrix, where rows are user ids and columns 
-        are movie titles
+        input: RDD created by joining ratings.csv and movies.csv - cleaned of duplicates and formatted accordingly
+        output: a sparse utility matrix, where rows are user ids and columns are movie titles
         """
-        # utility_matrix = deduped_ratings_df.merge(deduped_movies_df, how = 'left', on = 'movieId')
-        # u = utility_matrix[['userId','title','rating']]
+        #Type Cast the cols to numeric
+        ratings = ratings.withColumn('movieId',col('movieId').cast(IntegerType())).withColumn("userId",col("userId").cast(IntegerType()))
+        #Drop nulls
+        ratings = ratings.na.drop("any")
+        #Create training, val, test splits
+        (training, val, test) = ratings.randomSplit([0.6, 0.2, 0.2])
         # u = u.pivot(index='userId', columns = 'title', values ='rating')
-        # return(u)
+        return training, val, test
 
-    def create_train_val_test_splits(self, deduped_ratings_df, deduped_movie_df, u):
-        """
-        inputs, deduped_ratings_df and utility matrix
+    def fit_and_run(self, training, val, test):
+        #Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
+        als = ALS(maxIter=5, regParam=0.01, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
+        #Fit the model
+        model = als.fit(training)
 
-        returns: 3 sparse dataframes that are corresponding 
-        """
+        #Create predictions
+        predictions = model.transform(test)
+        evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating",
+                                        predictionCol="prediction")
+        rmse = evaluator.evaluate(predictions)
 
-        #strategy, initialize 3 empty dataframes in the same dimmensions as 
-        #our full utility matrix
+        #Print out predictions
+        print(f"Root-mean-square error = {rmse}")
 
-        # fill = u.shape
-        # train= pd.DataFrame(np.zeros(fill), columns = u.columns)
-        # val = pd.DataFrame(np.zeros(fill), columns = u.columns)
-        # test = pd.DataFrame(np.zeros(fill), columns = u.columns)
+        # Generate top 10 movie recommendations for each user
+        userRecs = model.recommendForAllUsers(100)
+        # Generate top 10 user recommendations for each movie
+        movieRecs = model.recommendForAllItems(100)
 
-
-        # #create a ratings dataframe that has movie title as a column
-        # rating_mt = deduped_ratings_df.merge(deduped_movies_df, how = 'left', on ='movieId')
-
-        # for idx in range(len(u.index)):
-        #     #for each user id, we find all the movies they watched
-        #     u_id = idx+1
-        #     user_ratings = rating_mt.loc[rating_mt['userId'] == u_id].sort_values(by='timestamp')
-
-        #     #we take the first sixty percent of movie names and associated ratings through indexing
-        #     #the user ratings dataframe, and taking the values of the title and ratings columns
-        #     msk1 = int(len(user_ratings)*.6)
-        #     train_cols, big_test_cols = list(user_ratings[:msk1].title.values), list(user_ratings[msk1:].title.values)
-        #     train_vals, big_test_vals = list(user_ratings[:msk1].rating.values),list(user_ratings[msk1:].rating.values)
-
-        #     #create a dictionary that will be passed into the .replace() method to assign the true ratings for this 
-        #     #user for the given set of movies in train and big test 
-        #     d_train = {train_cols[i]:{0:train_vals[i]} for i in range(len(train_cols))}
-        #     #modify the row to replace 0s with the appropriate value, using replace
-        #     train.iloc[idx] = train.replace(d_train).iloc[idx]
-
-        #     #subset big_test into true validation/test sets, taking 50% of 40% (i.e. 20%)
-        #     msk2 = int(len(big_test_cols)*.5)
-        #     val_cols, test_cols = list(user_ratings[msk1:][:msk2].title.values), list(user_ratings[msk1:][msk2:].title.values)
-        #     val_vals, test_vals = list(user_ratings[msk1:][:msk2].rating.values),list(user_ratings[msk1:][msk2:].rating.values)
-
-        #     d_val = {val_cols[i]:{0:val_vals[i]} for i in range(len(val_cols))}
-        #     d_test = {test_cols[i]:{0:test_vals[i]} for i in range(len(test_cols))}
-
-        #     #update the validation and test datasets to be a matrix in the same dimmension as u, but with
-        #     #that given user's rating for each movie 
-        #     val.iloc[idx] = val.replace(d_val).iloc[idx]
-        #     test.iloc[idx] = test.replace(d_test).iloc[idx]
-
-        # #replace 0's with NaN's
-        # train = train.replace(0, np.nan)
-        # val = val.replace(0, np.nan)
-        # test = test.replace(0, np.nan)
-
-        # #set indicidees to match the original, my indexing was off by 1 (no userId = 0)
-        # train = train.set_index(u.index)
-        # val = val.set_index(u.index)
-        # test = test.set_index(u.index)
-
-        # return(train,val,test)
+        #Return top 100 movie recs for each user, top 100 user recs for each movie
+        return userRecs, movieRecs
