@@ -1,12 +1,11 @@
-from itertools import count
 import numpy as np
 import pandas as pd
-import os
-import dask
 import code.constants as const
 import pyspark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
+from pyspark.sql.window import Window
+
 # And pyspark.sql to get the spark session
 # from pyspark.sql import SparkSession
 
@@ -54,22 +53,41 @@ class DataPreprocessor():
         joined = ratings.join(movies, ratings.movieId==movies.movieId, how='left').select(\
                             ratings.rating,ratings.userId,\
                             ratings.movieId,ratings.date,movies.title)
-        #Find Movie Titles that map to multiple IDs
-        dupes = joined.groupby("title").agg(countDistinct("movieId").alias("countD")).filter(col("countD")>1).select("title")
-        #step 1 identify movie titles with multiple ids 
-        # g = movies_df.groupby('title').movieId.count()>1
-        #step make a list of movie titles with more than one movieId 
-        # dupes = list(movies_df.groupby('title').movieId.count()[g].index)
-        #print('titles with more than one movieId in the movies data ',dupes)
-        #step three create a dictionary where the key is the movie title 
-        #and the values are the multiple Id's for that title
-        # d = {title:movies_df.loc[movies_df.title == title]['movieId'].values for title in dupes}
-        #step four, for each movie with multiple ids, identify the id with the  
-        #most reviews. Discard the other ids. Discarding was preferred rather than aggregation
-        #because some users rated the same title differently, which would have lead in a .25 rating
 
-        
+        #Find Movie Titles that map to multiple IDs
+        dupes = joined.groupby("title").agg(countDistinct("movieId").alias("countD")).filter(col("countD")>1)
+
+        #Isolate non-dupes into a df
+        non_dupes = joined.join(dupes, joined.title==dupes.title, how='leftanti')
     
+        #Get all of the dupes data - ratings, userId, ect - again from Joined
+        dupes = dupes.join(joined, joined.title==dupes.title, how='inner').select(\
+                                        joined.movieId,joined.rating,\
+                                        joined.date,dupes.title,joined.userId)
+    
+        #Clean the dupes accordingly
+        #Step 1: Aggregate by title/movie Id, then count userId - give alias
+        #Step 2: Create a window to partition by - we iterate over titles ranking by 
+        #countD (count distinct of userId) - movieId forces a deterministic ranking based off movieId
+        #Step 3: Filter max_dupes so we only grab top ranking movieIds
+        windowSpec = Window.partitionBy("title").orderBy("countD","movieId")
+        max_dupes = dupes.groupBy(["title","movieId"]).agg(countDistinct("userId").alias("countD"))
+        max_dupes = max_dupes.withColumn("dense_rank",dense_rank().over(windowSpec))
+        max_dupes = max_dupes.filter(max_dupes.dense_rank=="2")
+        max_dupes = max_dupes.drop("countD","dense_rank")
+        
+        #Get a list of movie ids ~len(5) for small - which are the ones we want to keep
+        ids = list(max_dupes.toPandas()['movieId'])
+        cleaned_dupes = dupes.where(dupes.movieId.isin(ids))
+        
+        #Get the union of the non_dupes and cleaned_dupes
+        all_data = non_dupes.union(cleaned_dupes)
+
+        #For testing purposes should be 100,830
+        print(f"The length of the combined and de-deduped joined data-set is: {len(all_data.collect())}")
+        #Return all_data
+        return all_data
+
     def create_utility_matrix(self,deduped_ratings_df,deduped_movies_df):
         """
         input: deduped movies and ratings df, meaning title and movieId map 1:1
