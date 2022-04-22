@@ -36,3 +36,7 @@ This python script will hold a class, `DataPreprocessor` that will have the resp
 - Submit Job
 
 > spark-submit some_script.py `args`
+
+- Long way to Submit Job
+
+> spark-submit --conf  spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true `python_file` `args`
