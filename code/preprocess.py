@@ -99,7 +99,7 @@ class DataPreprocessor():
         all_data = non_dupes.union(cleaned_dupes)
 
         #For testing purposes should be 100,830
-        print(f"The length of the combined and de-deduped joined data-set is: {len(all_data.collect())}")
+        #print(f"The length of the combined and de-deduped joined data-set is: {len(all_data.collect())}")
 
         #Drop nulls
 

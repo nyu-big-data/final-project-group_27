@@ -32,11 +32,12 @@ def main(spark, dataset_size):
     val.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_small_val")
     test.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_test")
     print("Finished Saving")
-    #Let us know when its done
 
+    print(f"Running data.preprocess() for {filepath}")
     #THIS IS A TEST - REMOVE LATER
     data.preprocess()        
 
+    #Let us know when its done
     print(f"Done for dataset {filepath}")
 
 # Only enter this block if we're in main
