@@ -127,14 +127,14 @@ class DataPreprocessor():
         model = als.fit(training)
 
         #Create predictions
-        predictions = model.transform(test)
+        predictions = model.transform(val)
         #Evalaute Predictions
         evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
         #Calculate RMSE
         rmse = evaluator.evaluate(predictions)
 
         #Print out predictions
-        print(f"Root-mean-square error = {rmse}")
+        print(f"Root-mean-square error for Val = {rmse}")
 
         # Generate top 10 movie recommendations for each user
         userRecs = model.recommendForAllUsers(100)
