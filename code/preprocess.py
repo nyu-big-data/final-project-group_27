@@ -17,8 +17,6 @@ class DataPreprocessor():
     def __init__(self, spark, file_path) -> None:
         self.spark = spark
         self.file_path = file_path                      #File Path to Read in Data
-        self.working_dir = os.getcwd()                  #Get Current Working Directory
-        self.csv_names = const.CSV_NAME_LIST            #Grab csv names List like: ['rationgs.csv','tags.csv'...]
 
     def clean_data(self):
         #Format Date Time
@@ -46,7 +44,6 @@ class DataPreprocessor():
         #Same for ratings
         ratings = self.spark.read.csv(self.file_path + 'ratings.csv', schema='userId INT, movieId INT, rating FLOAT, timestamp DATETYPE') #Date type?
         
-
         #Combine or ditch reviews that have dupes?
         double_counts = movies.groupby('title').count()
         print(double_counts)

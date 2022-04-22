@@ -10,3 +10,29 @@ This python folder should be imported into the other scripts we run and holds fi
 ## Preprocess
 
 This python script will hold a class, `DataPreprocessor` that will have the responsabilities to preprocess our data as necessary.
+
+## HFS
+
+- Add files to hadoop cluster
+
+> hfs -put
+
+- List files on Hadoop Cluster
+
+> hfs -ls
+
+- Remove Files on Hadoop Cluster
+
+> hfs -rm -r `file_name`
+
+## Yarn Logs
+
+- Access Yarn Logs
+
+> yarn logs -applicationId application_1648648882306_28175 -log_files stdout
+
+## Spark
+
+- Submit Job
+
+> spark-submit some_script.py `args`

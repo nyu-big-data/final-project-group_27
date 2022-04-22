@@ -3,16 +3,19 @@ from code.preprocess import DataPreprocessor
 import code.constants as const
 import sys
 from pyspark.sql import SparkSession
+import getpass
 
 
-def main(spark, filepath_arg):
+
+def main(spark, netID, filepath_arg):
     """
     This program should be ran from the command line with an argument of what dataset to run on.
     The program will complete the code inside the main block below, and output train,val, and test sets into the Data_Partitions Folder.
     The code Will run off of the code in data_preprocessor
     """
     #Grab releveant file path
-    filepath = const.DATASET_DICT[filepath_arg]
+    filepath = const.HPC_DATA_FILEPATH + netID
+    #filepath = const.DATASET_DICT[filepath_arg]
     print(f"filepath_arg: {filepath_arg} file_path: {filepath}")
     
     data = DataPreprocessor(spark,filepath)
@@ -29,8 +32,8 @@ def main(spark, filepath_arg):
 
 # Only enter this block if we're in main
 if __name__ == "__main__":
-
+    netID = getpass.getuser() + "/"
     #Initalize spark session
     spark = SparkSession.builder.appName('Spark_Session_Name').getOrCreate()
-    main(spark, sys.argv[1]) #Either 'small' or 'large' should be passed through
+    main(spark, netID, sys.argv[1]) #Either 'small' or 'large' should be passed through
    
