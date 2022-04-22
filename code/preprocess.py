@@ -8,6 +8,7 @@ from pyspark.sql.window import Window
 from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.recommendation import ALS
 from pyspark.sql import Row
+from pyspark.sql.types import StringType,BooleanType,DateType,IntegerType
 
 # And pyspark.sql to get the spark session
 # from pyspark.sql import SparkSession
@@ -29,14 +30,15 @@ class DataPreprocessor():
         #Format Date Time
 
         #Deduplicate Data
-        clean_data = self.clean_data()            #No args need to be passed, returns RDD of joined data (movies,ratings), without duplicates
+        clean_data = self.clean_data()                                                  #No args need to be passed, returns RDD of joined data (movies,ratings), without duplicates
         #Get Utility Matrix
-        train, val, test = self.create_train_val_test_splits(clean_data)
+        train, val, test = self.create_train_val_test_splits(clean_data)                #Needs clean_data to run, returns train/val/test splits
         #Fit and run model
-        top_100_movie_recs, top_100_user_recs = self.fit_and_run(train,val,test)        #Need to figure out how to get val set in there TO DO
+        #TO DO: FIGURE OUT HOW TO GET VAL SPLIT IN THERE
+        userRecs, movieRecs = self.fit_and_run(train,val,test)        #returns userRecs - top N movies for users, movieRecs - top N users for movies
         
         #Return top 100 recs for movies / users
-        return top_100_movie_recs, top_100_user_recs
+        return userRecs, movieRecs
     
     def clean_data(self):
         """
@@ -126,8 +128,9 @@ class DataPreprocessor():
 
         #Create predictions
         predictions = model.transform(test)
-        evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating",
-                                        predictionCol="prediction")
+        #Evalaute Predictions
+        evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
+        #Calculate RMSE
         rmse = evaluator.evaluate(predictions)
 
         #Print out predictions

@@ -3,11 +3,8 @@ from code.preprocess import DataPreprocessor
 import code.constants as const
 import sys
 from pyspark.sql import SparkSession
-import getpass
 
-
-
-def main(spark):
+def main(spark, dataset_size):
     """
     This program should be ran from the command line with an argument of what dataset to run on.
     The program will complete the code inside the main block below, and output train,val, and test sets into the Data_Partitions Folder.
@@ -21,7 +18,7 @@ def main(spark):
     data = DataPreprocessor(spark,filepath)
     
     #THIS IS A TEST - REMOVE LATER
-    data.preprocess()
+    data.preprocess()                   
 
     #Ideally Preprocess Data Something Like this:
     print(f"file_path: {filepath}")
@@ -34,7 +31,10 @@ def main(spark):
     train, val, test = data.create_train_val_test_splits(clean_data=clean_data)
     #Output Train/Test/Val Splits into Data_partitions
     print(f"Saving train/val/test splits to {const.SAVE_FILE_PATH}")
-    
+    train.write.csv(f"{const.SAVE_FILE_PATH}{dataset_size}_train")
+    val.write.csv(f"{const.SAVE_FILE_PATH}{dataset_size}_small_val")
+    test.write.csv(f"{const.SAVE_FILE_PATH}{dataset_size}_test")
+    print("Finished Saving")
     #Let us know when its done
     print(f"Done for dataset {filepath}")
 
@@ -42,5 +42,6 @@ def main(spark):
 if __name__ == "__main__":
     #Initalize spark session
     spark = SparkSession.builder.appName('Spark_Session_Name').getOrCreate()
-    main(spark, sys.argv[1]) #Either 'small' or 'large' should be passed through
+    dataset_size = sys.argv[1]
+    main(spark, dataset_size) #Either 'small' or 'large' should be passed through
    
