@@ -2,10 +2,14 @@
 
 This folder should be used to store various libraries of code we develop for this project. We should use an object oriented approach to keep our code tidy, efficient, and debbugable.
 
-## Contstants
+## Contstants and how to Find Files / Run Scripts Properly
 
-This python folder should be imported into the other scripts we run and holds file paths for datasets and other constant variables.
-> For Example: `HPC_SMALL_FILEPATH = "/scratch/work/courses/DSGA1004-2021/movielens"`
+The constants.py python file should be imported into the other scripts we run and holds file paths for datasets and other constant variables.
+> For Example: `RESULTS_SAVE_FILE_PATH="/gjd9961/scratch/big_data_final_results/results.txt"`
+
+For the script to be able to find the correct files in hdfs, you must save your files in hdfs with the naming convention: `"small-movies.csv"` or `"large-ratings.csv"`
+
+When we run preprocess, train test and val splits will be saved to your hdfs with the following naming convention: `"small_val"` or `"large_train"`
 
 ## Preprocess
 

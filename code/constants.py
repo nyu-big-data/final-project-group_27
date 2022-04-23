@@ -5,4 +5,4 @@ import getpass
 netID = getpass.getuser() + "/"
 HPC_DATA_FILEPATH = "hdfs:/user/" + netID
 MODEL_SAVE_FILE_PATH = netID + "scratch/rec_models/"
-RESULTS_SAVE_FILE_PATH = netID + "scratch/big_data_final_results/results.txt"   
+RESULTS_SAVE_FILE_PATH = "/gjd9961/scratch/big_data_final_results/results.txt"   

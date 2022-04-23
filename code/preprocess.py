@@ -36,6 +36,7 @@ class DataPreprocessor():
         remove the duplicate IDs with the least ratings for each movie. 
         Additionally, remove those IDs from the ratings dataset, so we get a 1:1 mapping
         between movie title and movie ID
+
         inputs: None, however - self.file_path -> this should link to your hfs/netid/
         outputs: all_data - a RDD of joined data (movies,reviews) - deduplicated of titles that appear more than once
                 this loses only 6 records (reviews from users) for small
@@ -84,6 +85,17 @@ class DataPreprocessor():
         ids = list(max_dupes.toPandas()['movieId'])
         cleaned_dupes = dupes.where(dupes.movieId.isin(ids))
         
+
+        """
+        Syntactical Change: reorder columns in cleaned dupes to match the order of non_dupes
+        that way the union will successfully add rows of the right columns to the non_dupes table.
+        
+        I think you correct for this with the type casting and dropping of nulls in the next function
+        so there's no tangible impact
+        """
+        cleaned_dupes = cleaned_dupes.select('rating', 'userId', 'movieId', 'date', 'title')
+
+        
         #Get the union of the non_dupes and cleaned_dupes
         clean_data = non_dupes.union(cleaned_dupes)
 
@@ -109,7 +121,64 @@ class DataPreprocessor():
         ratings = clean_data.withColumn('movieId',col('movieId').cast(IntegerType())).withColumn("userId",col("userId").cast(IntegerType()))
         #Drop nulls
         ratings = ratings.na.drop("any")
-        #Create training, val, test splits
-        (training, val, test) = ratings.randomSplit([0.6, 0.2, 0.2])
+           
+        """
+        Joby Logic: Create two columns, one will measure the specific row count for a specific user
+        the other will be static fixed at the total number of reviews for that user
+        
+        row count is sorted by date, meaning row 1 is the oldest review
+        
+        we subset training to be where row_count <= .6 *length, grabbing the earliest 60% of reviews, for
+        all users
+        
+        we subset the remaining data into a hold out, with the goal of creating two disjoint validation
+        and test data sets when looking at userId (meaning they should not have any shared userId values), 
+        but still have roughly the same amount of data, or whatever percentage we want to achieve
+        
+        to obtain approximate equality and disjoint userId membership, for the remiaining data
+        sort userId by user_review_count descending, then alternate values in that list, assigning
+        half to test and half to validation.
+        
+
+        create test/validation set by selecting userId.isin(validation_userId_list), and those
+        not in the list
+        """
+        #strategy, partition by userId, and userId order by date, 
+        #take the first 60% of reviews for all users
+        w1 = Window.partitionBy("userId")
+        w2 = Window.partitionBy("userId").orderBy("date")
+        
+        ratings = (ratings.withColumn("row_num", row_number().over(w2))
+                       .withColumn('length', count('userId').over(w1))
+                  )
+        
+        #store in training RDD by 
+        #selecting all rows where the row_count for that user <= 60% total reviews for that user
+        
+        training = ratings.filter("row_num <=.6*length")
+        #now for validation and test set, we want those to have no users in common, but for them to
+        #be approximately equal size. 
+        holdout_df = ratings.filter("row_num >.6*length")
+        
+        #strategy, of the data not in my train set, group users by number of movies they have seen
+        #sort descending
+        holdout_split = holdout_df.groupBy("userId").count().orderBy("count", ascending=False).toPandas()
+        
+        
+        #store the list of userIds sorted by descending total movie count
+        holdout_split = list(holdout_split.userId)
+        
+        #partition list of userIds by taking every other index and putting it in the validation set
+        val_users = holdout_split[::2]
+        
+        #create a validation and test set by filtering holdout data based on whether movieId isin val_users
+        val = holdout_df.filter(holdout_df.userId.isin(val_users))
+        test = holdout_df.filter(~holdout_df.userId.isin(val_users))
+
+
         # u = u.pivot(index='userId', columns = 'title', values ='rating')
         return training, val, test
+
+
+
+    
