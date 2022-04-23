@@ -16,17 +16,36 @@ class DataPreprocessor():
 
 
     #Main Method - Call this in partition_data.py to get train/val/test splits returned
-    def preprocess(self):
+    def preprocess(self, sanity_checker=False):
         """
         Goal: Save train/val/test splits to netID/scratch - all using self methods
         Step 1: self.clean_data: clean the data, format timestamp to date, and remove duplicate movie titles
         Step 2: self.create_train_val_test_splits: reformats data, drops nans, and returns train,val and test splits
+        input:
+        -----
+        sanity_checker: boolean - Flag that decides if we call self.sanity_check()
+        -----
+        output: 
+        train: RDD of Training Set Data
+        val: RDD of Validation Set Data
+        test: RDD of Validation Set Data
         """
         #Format Date Time and Deduplicate Data
         clean_data = self.clean_data()                                                  #No args need to be passed, returns RDD of joined data (movies,ratings), without duplicates
         #Get Utility Matrix
         train, val, test = self.create_train_val_test_splits(clean_data)                #Needs clean_data to run, returns train/val/test splits
-        #Return top 100 recs for movies / users
+        
+        #Check if we should perform sanity check
+        if sanity_checker:
+            flag = self.sanity_check(train,val,test)
+            #If flag == True we're good
+            if flag:
+                print("The val and test splits are disjoint!")
+            #Otherwise raise exception
+            else:
+                raise Exception("The Validation and Test sets are not disjoint!")
+
+        #Return train val test sets
         return train, val, test
     
     #preprocess calls this function
@@ -190,7 +209,7 @@ class DataPreprocessor():
         test_obs = test.count()
 
         #Print them out
-        print(f"Training Data Length: {training_obs} Val Len: {val_obs}, Test Len: {test_obs}")
+        print(f"Training Data Len: {training_obs} Val Len: {val_obs}, Test Len: {test_obs}")
 
         #Check if there are any overlapping_ids in the sets
         overllaping_ids = val.join(test, test.userId==val.userId,how='inner').count()

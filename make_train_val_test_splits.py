@@ -20,13 +20,14 @@ def main(spark, dataset_size):
                
     print(f"Splitting Train/Val/Test for {filepath}")
     #Call train/test/val splits - Returns train, val, test data splits
-    train, val, test = data.preprocess()
+    train, val, test = data.preprocess(sanity_checker=True)
 
     #Output Train/Test/Val Splits into Data_partitions
     print(f"Saving train/val/test splits to {const.HPC_DATA_FILEPATH}")
     train.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_train.csv")
     val.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_val.csv")
     test.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_test.csv")
+
 
     #Let us know when done
     print("Finished Saving")
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     #Either 'small' or 'large' should be passed through -> sys.argv[1]
     dataset_size = sys.argv[1]
     if dataset_size not in ['small','large']:
-        print("Terminating, you must enter 'small' or 'large'")
+        raise Exception("Terminating, you must enter 'small' or 'large'")
     else:
         main(spark, dataset_size) 
    
