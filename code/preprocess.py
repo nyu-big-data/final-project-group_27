@@ -36,7 +36,6 @@ class DataPreprocessor():
         remove the duplicate IDs with the least ratings for each movie. 
         Additionally, remove those IDs from the ratings dataset, so we get a 1:1 mapping
         between movie title and movie ID
-
         inputs: None, however - self.file_path -> this should link to your hfs/netid/
         outputs: all_data - a RDD of joined data (movies,reviews) - deduplicated of titles that appear more than once
                 this loses only 6 records (reviews from users) for small
@@ -114,5 +113,3 @@ class DataPreprocessor():
         (training, val, test) = ratings.randomSplit([0.6, 0.2, 0.2])
         # u = u.pivot(index='userId', columns = 'title', values ='rating')
         return training, val, test
-
-    

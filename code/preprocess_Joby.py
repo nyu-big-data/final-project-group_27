@@ -1,144 +1,184 @@
 import numpy as np
 import pandas as pd
-import os
-import dask
 import code.constants as const
 import pyspark
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.window import Window
+from pyspark.sql import Row
+from pyspark.sql.types import IntegerType
 
-# And pyspark.sql to get the spark session
-# from pyspark.sql import SparkSession
-
-
-#A class used to preprocess data
-#And save out data to Data_Partitions Folder
+#A class used to preprocess data and to return train/val/test splits
 class DataPreprocessor():
-    def __init__(self, file_path) -> None:
+    def __init__(self, spark, file_path) -> None:
+        self.spark = spark                              #Spark Driver
         self.file_path = file_path                      #File Path to Read in Data
-        self.working_dir = os.getcwd()                  #Get Current Working Directory
-        self.csv_names = const.CSV_NAME_LIST            #Grab csv names List like: ['rationgs.csv','tags.csv'...]
 
-    def clean_data(self):
-        #Format Date Time
 
-        #Fix Duplicates
-
-        #
-        
-        pass
+    #Main Method - Call this in partition_data.py to get train/val/test splits returned
+    def preprocess(self):
+        """
+        Goal: Save train/val/test splits to netID/scratch - all using self methods
+        Step 1: self.clean_data: clean the data, format timestamp to date, and remove duplicate movie titles
+        Step 2: self.create_train_val_test_splits: reformats data, drops nans, and returns train,val and test splits
+        """
+        #Format Date Time and Deduplicate Data
+        clean_data = self.clean_data()                                                  #No args need to be passed, returns RDD of joined data (movies,ratings), without duplicates
+        #Get Utility Matrix
+        train, val, test = self.create_train_val_test_splits(clean_data)                #Needs clean_data to run, returns train/val/test splits
+        #Return top 100 recs for movies / users
+        return train, val, test
     
-    def delete_dupe_ids(self,ratings_df, movies_df):
+    #preprocess calls this function
+    def clean_data(self):
         """
         goal: for movie titles with multiple movieIDs, in the movies dataset,
         remove the duplicate IDs with the least ratings for each movie. 
         Additionally, remove those IDs from the ratings dataset, so we get a 1:1 mapping
         between movie title and movie ID
 
-        inputs: ratings_df, movies_df
-        outputs: deduped_ratings_df, deduped_movies_df
+        inputs: None, however - self.file_path -> this should link to your hfs/netid/
+        outputs: all_data - a RDD of joined data (movies,reviews) - deduplicated of titles that appear more than once
+                this loses only 6 records (reviews from users) for small
         """
-        #step 1 identify movie titles with multiple ids 
-        g = movies_df.groupby('title').movieId.count()>1
-        
-        #step make a list of movie titles with more than one movieId 
-        dupes = list(movies_df.groupby('title').movieId.count()[g].index)
-        #print('titles with more than one movieId in the movies data ',dupes)
-       
-        #step three create a dictionary where the key is the movie title 
-        #and the values are the multiple Id's for that title
-        d = {title:movies_df.loc[movies_df.title == title]['movieId'].values for title in dupes}
 
-        #step four, for each movie with multiple ids, identify the id with the  
-        #most reviews. Discard the other ids. Discarding was preferred rather than aggregation
-        #because some users rated the same title differently, which would have lead in a .25 rating
-
-        discard_ids = []
-        for v in d.values():
-            g = ratings_df.loc[ratings_df['movieId'].isin(v)].groupby('movieId').count()
-            #keep only the movie id with the most amount of reviews for each title with multiple
-            #movieIds
-            discard_ids.append(g.sort_values(by='userId',ascending=True).iloc[-1].name)
-            
-        #remove movieId's with a duplicate title    
-        deduped_movies_df = movies_df.loc[~(movies_df.movieId.isin(discard_ids))]
-        deduped_ratings_df = ratings_df.loc[~(ratings_df.movieId.isin(discard_ids))]
-
-        return(deduped_movies_df, deduped_ratings_df)
+        #Import the movies data + add to schema so it can be used by SQL + header=True because there's a header
+        movies = self.spark.read.csv(self.file_path + 'movies.csv', header=True, \
+                                    schema='movieId INT, title STRING, genres STRING')
     
-    def create_utility_matrix(self,deduped_ratings_df,deduped_movies_df):
+        #Same for ratings - TIMESTAMP MUST BE STRING
+        ratings = self.spark.read.csv(self.file_path + 'ratings.csv', header=True, \
+                    schema='userId INT, movieId INT, rating FLOAT, timestamp STRING') 
+        
+        #Get the MM-dd-yyyy format for timestamp values producing new column, Date
+        ratings = ratings.withColumn("date",from_unixtime(col("timestamp"),"MM-dd-yyyy"))
+        ratings = ratings.drop("timestamp") #Drop timestamp, we now have date
+
+        #Join Dfs - Join Movies with Ratings on movieId, LEFT JOIN used, select only rating, userId, movieId, title and date
+        joined = ratings.join(movies, ratings.movieId==movies.movieId, how='left').select(\
+                            ratings.rating,ratings.userId,\
+                            ratings.movieId,ratings.date,movies.title)
+
+        #Find Movie Titles that map to multiple IDs
+        dupes = joined.groupby("title").agg(countDistinct("movieId").alias("countD")).filter(col("countD")>1)
+
+        #Isolate non-dupes into a df
+        non_dupes = joined.join(dupes, joined.title==dupes.title, how='leftanti')
+    
+        #Get all of the dupes data - ratings, userId, ect - again from Joined
+        dupes = dupes.join(joined, joined.title==dupes.title, how='inner').select(\
+                                        joined.movieId,joined.rating,\
+                                        joined.date,dupes.title,joined.userId)
+    
+        #Clean the dupes accordingly
+        #Step 1: Aggregate by title/movie Id, then count userId - give alias
+        #Step 2: Create a window to partition by - we iterate over titles ranking by 
+        #countD (count distinct of userId) - movieId forces a deterministic ranking based off movieId
+        #Step 3: Filter max_dupes so we only grab top ranking movieIds
+        windowSpec = Window.partitionBy("title").orderBy("countD","movieId")
+        max_dupes = dupes.groupBy(["title","movieId"]).agg(countDistinct("userId").alias("countD"))
+        max_dupes = max_dupes.withColumn("dense_rank",dense_rank().over(windowSpec))
+        max_dupes = max_dupes.filter(max_dupes.dense_rank=="2")
+        max_dupes = max_dupes.drop("countD","dense_rank")
+        
+        #Get a list of movie ids ~len(5) for small - which are the ones we want to keep
+        ids = list(max_dupes.toPandas()['movieId'])
+        cleaned_dupes = dupes.where(dupes.movieId.isin(ids))
+        
+
         """
-        input: deduped movies and ratings df, meaning title and movieId map 1:1
-        and all duplicative movieIds have been removed from ratings_df
-
-        returns: a sparse utility matrix, where rows are user ids and columns 
-        are movie titles
+        Syntactical Change: reorder columns in cleaned dupes to match the order of non_dupes
+        that way the union will successfully add rows of the right columns to the non_dupes table.
+        
+        I think you correct for this with the type casting and dropping of nulls in the next function
+        so there's no tangible impact
         """
-        utility_matrix = deduped_ratings_df.merge(deduped_movies_df, how = 'left', on = 'movieId')
-        u = utility_matrix[['userId','title','rating']]
-        u = u.pivot(index='userId', columns = 'title', values ='rating')
-        return(u)
-
-    def create_train_val_test_splits(self, deduped_ratings_df, deduped_movie_df, u):
-        """
-        inputs, deduped_ratings_df and utility matrix
-
-        returns: 3 sparse dataframes that are corresponding 
-        """
-
-        #strategy, initialize 3 empty dataframes in the same dimmensions as 
-        #our full utility matrix
-
-        fill = u.shape
-        train= pd.DataFrame(np.zeros(fill), columns = u.columns)
-        val = pd.DataFrame(np.zeros(fill), columns = u.columns)
-        test = pd.DataFrame(np.zeros(fill), columns = u.columns)
-
-
-        #create a ratings dataframe that has movie title as a column
-        rating_mt = deduped_ratings_df.merge(deduped_movies_df, how = 'left', on ='movieId')
-
-        for idx in range(len(u.index)):
-            #for each user id, we find all the movies they watched
-            u_id = idx+1
-            user_ratings = rating_mt.loc[rating_mt['userId'] == u_id].sort_values(by='timestamp')
-
-            #we take the first sixty percent of movie names and associated ratings through indexing
-            #the user ratings dataframe, and taking the values of the title and ratings columns
-            msk1 = int(len(user_ratings)*.6)
-            train_cols, big_test_cols = list(user_ratings[:msk1].title.values), list(user_ratings[msk1:].title.values)
-            train_vals, big_test_vals = list(user_ratings[:msk1].rating.values),list(user_ratings[msk1:].rating.values)
-
-            #create a dictionary that will be passed into the .replace() method to assign the true ratings for this 
-            #user for the given set of movies in train and big test 
-            d_train = {train_cols[i]:{0:train_vals[i]} for i in range(len(train_cols))}
-            #modify the row to replace 0s with the appropriate value, using replace
-            train.iloc[idx] = train.replace(d_train).iloc[idx]
-
-            #subset big_test into true validation/test sets, taking 50% of 40% (i.e. 20%)
-            msk2 = int(len(big_test_cols)*.5)
-            val_cols, test_cols = list(user_ratings[msk1:][:msk2].title.values), list(user_ratings[msk1:][msk2:].title.values)
-            val_vals, test_vals = list(user_ratings[msk1:][:msk2].rating.values),list(user_ratings[msk1:][msk2:].rating.values)
-
-            d_val = {val_cols[i]:{0:val_vals[i]} for i in range(len(val_cols))}
-            d_test = {test_cols[i]:{0:test_vals[i]} for i in range(len(test_cols))}
-
-            #update the validation and test datasets to be a matrix in the same dimmension as u, but with
-            #that given user's rating for each movie 
-            val.iloc[idx] = val.replace(d_val).iloc[idx]
-            test.iloc[idx] = test.replace(d_test).iloc[idx]
-
-        #replace 0's with NaN's
-        train = train.replace(0, np.nan)
-        val = val.replace(0, np.nan)
-        test = test.replace(0, np.nan)
-
-        #set indicidees to match the original, my indexing was off by 1 (no userId = 0)
-        train = train.set_index(u.index)
-        val = val.set_index(u.index)
-        test = test.set_index(u.index)
-
-        return(train,val,test)
-
+        cleaned_dupes = cleaned_dupes.select('rating', 'userId', 'movieId', 'date', 'title')
 
         
-#Some change
+        #Get the union of the non_dupes and cleaned_dupes
+        clean_data = non_dupes.union(cleaned_dupes)
+
+        #Subtract 2.5 from each review to create negative reviews
+        clean_data = clean_data.withColumn("rating",col("rating")-2.5)
+        
+        #For testing purposes should be 100,830 for small dataset
+        #print(f"The length of the combined and de-deduped joined data-set is: {len(clean_data.collect())}")
+
+        #Return clean_data -> Type: Spark RDD Ready for more computation
+        return clean_data
+
+    #TO DO?? Should we enforce min_review cutoff to make sure no cold-start for any prediction?
+    def enforce_min_review(self):
+        pass
+    #Create Train Test Val Splits - .preprocess() calls this function
+    def create_train_val_test_splits(self, clean_data):
+        """
+        input: RDD created by joining ratings.csv and movies.csv - cleaned of duplicates and formatted accordingly
+        output: training 60%, val 20%, test 20% splits with colums cast to integer type and na's dropped
+        """
+        #Type Cast the cols to numeric
+        ratings = clean_data.withColumn('movieId',col('movieId').cast(IntegerType())).withColumn("userId",col("userId").cast(IntegerType()))
+        #Drop nulls
+        ratings = ratings.na.drop("any")
+           
+        """
+        Joby Logic: Create two columns, one will measure the specific row count for a specific user
+        the other will be static fixed at the total number of reviews for that user
+        
+        row count is sorted by date, meaning row 1 is the oldest review
+        
+        we subset training to be where row_count <= .6 *length, grabbing the earliest 60% of reviews, for
+        all users
+        
+        we subset the remaining data into a hold out, with the goal of creating two disjoint validation
+        and test data sets when looking at userId (meaning they should not have any shared userId values), 
+        but still have roughly the same amount of data, or whatever percentage we want to achieve
+        
+        to obtain approximate equality and disjoint userId membership, for the remiaining data
+        sort userId by user_review_count descending, then alternate values in that list, assigning
+        half to test and half to validation.
+        
+
+        create test/validation set by selecting userId.isin(validation_userId_list), and those
+        not in the list
+        """
+        #strategy, partition by userId, and userId order by date, 
+        #take the first 60% of reviews for all users
+        w1 = Window.partitionBy("userId")
+        w2 = Window.partitionBy("userId").orderBy("date")
+        
+        ratings = (ratings.withColumn("row_num", row_number().over(w2))
+                       .withColumn('length', count('userId').over(w1))
+                  )
+        
+        #store in training RDD by 
+        #selecting all rows where the row_count for that user <= 60% total reviews for that user
+        
+        training = ratings.filter("row_num <=.6*length")
+        #now for validation and test set, we want those to have no users in common, but for them to
+        #be approximately equal size. 
+        holdout_df = ratings.filter("row_num >.6*length")
+        
+        #strategy, of the data not in my train set, group users by number of movies they have seen
+        #sort descending
+        holdout_split = holdout_df.groupBy("userId").count().orderBy("count", ascending=False).toPandas()
+        
+        
+        #store the list of userIds sorted by descending total movie count
+        holdout_split = list(holdout_split.userId)
+        
+        #partition list of userIds by taking every other index and putting it in the validation set
+        val_users = holdout_split[::2]
+        
+        #create a validation and test set by filtering holdout data based on whether movieId isin val_users
+        val = holdout_df.filter(holdout_df.userId.isin(val_users))
+        test = holdout_df.filter(~holdout_df.userId.isin(val_users))
+
+
+        # u = u.pivot(index='userId', columns = 'title', values ='rating')
+        return training, val, test
+
+
+
+    
