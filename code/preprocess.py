@@ -101,9 +101,6 @@ class DataPreprocessor():
         #Return clean_data -> Type: Spark RDD Ready for more computation
         return clean_data
 
-    #TO DO?? Should we enforce min_review cutoff to make sure no cold-start for any prediction?
-    def enforce_min_review(self):
-        pass
     #Create Train Test Val Splits - .preprocess() calls this function
     def create_train_val_test_splits(self, clean_data):
         """
@@ -138,11 +135,10 @@ class DataPreprocessor():
         #take the first 60% of reviews for all users
         w1 = Window.partitionBy("userId")
         w2 = Window.partitionBy("userId").orderBy("date")
-        
         ratings = (ratings.withColumn("row_num", row_number().over(w2))
                        .withColumn('length', count('userId').over(w1))
                   )
-        
+
         #store in training RDD by 
         #selecting all rows where the row_count for that user <= 60% total reviews for that user
         
@@ -155,7 +151,6 @@ class DataPreprocessor():
         #sort descending
         holdout_split = holdout_df.groupBy("userId").count().orderBy("count", ascending=False).toPandas()
         
-        
         #store the list of userIds sorted by descending total movie count
         holdout_split = list(holdout_split.userId)
         
@@ -166,10 +161,28 @@ class DataPreprocessor():
         val = holdout_df.filter(holdout_df.userId.isin(val_users))
         test = holdout_df.filter(~holdout_df.userId.isin(val_users))
 
-
-        # u = u.pivot(index='userId', columns = 'title', values ='rating')
+        #Return train/val/test splits
         return training, val, test
 
+    #TO DO?? Should we enforce min_review cutoff to make sure no cold-start for any prediction?
+    def enforce_min_review(self):
+        pass
+
+    #Check to train/val/test splits to make sure approx 60/20/20 split is achieved
+    def sanity_check(self,train,val,test):
+        """
+        Method to print out the shape of train/val/test splits, and a check to make sure that
+        val and test splits are disjoint (no distinct userId appears in both)
+        input:
+        -----
+        train: RDD - Training data split created from .create_train_val_test_splits
+        val: RDD - Validation data split created from .create_train_val_test_splits
+        test: RDD - Testing data split created from .create_train_val_test_splits
+        -----
+        output:
+        -----
+        returnFlag: boolean - True means test and val splits are disjoint on userId
+        """
 
 
-    
+        pass
