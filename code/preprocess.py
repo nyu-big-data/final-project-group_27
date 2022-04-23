@@ -97,6 +97,9 @@ class DataPreprocessor():
         #Return clean_data -> Type: Spark RDD Ready for more computation
         return clean_data
 
+    #TO DO?? Should we enforce min_review cutoff to make sure no cold-start for any prediction?
+    def enforce_min_review(self):
+        pass
     #Create Train Test Val Splits - .preprocess() calls this function
     def create_train_val_test_splits(self, clean_data):
         """
