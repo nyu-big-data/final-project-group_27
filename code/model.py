@@ -19,7 +19,7 @@ class Model():
     nonnegative: boolean - Flag as to whether or not outputs can be negative or positive
     alpha: float - Alpha parameter in case we do any implicitFeedback methods
     model_save: boolean - Flag to determine if we should save the model progress or not
-    num_recs: int - Top X number of reccomendations to return
+    num_recs: int - Top X number of reccomendations to return - default set to 100
     -----
     Model methods:
     -----
@@ -32,7 +32,7 @@ class Model():
     #Constructor for Model
     def __init__(self, rank=10, maxIter=5,regParam=0.01, \
                     seed=10,nonnegative=True,alpha=1,model_save=False, \
-                    num_recs=10):
+                    num_recs=100):
         #Model Attributes                    
         self.rank = rank                                                                    #Rank of latent factors used in decomposition
         self.maxIter = maxIter                                                              #Number of iterations to run algorithm, recommended 5-20

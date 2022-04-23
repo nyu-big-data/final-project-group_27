@@ -7,11 +7,13 @@ from pyspark.sql import SparkSession
 def main(spark, dataset_size):
     """
     This program should be ran from the command line with an argument of what dataset to run on.
+    dataset_size arg is either 'small' or 'large. The files you have stored in hdfs must be
+    named like "small-ratings.csv" or "large-movies.csv"
     The program will complete the code inside the main block below, and output train,val, and test sets into the Data_Partitions Folder.
-    The code Will run off of the code in data_preprocessor
+    The code Will run off of the code in preprocess
     """
     #Grab releveant file path
-    filepath = const.HPC_DATA_FILEPATH
+    filepath = const.HPC_DATA_FILEPATH + dataset_size + "-"
     
     #Initialize DataPreprocessor Object
     data = DataPreprocessor(spark,filepath)
@@ -35,5 +37,8 @@ if __name__ == "__main__":
     spark = SparkSession.builder.appName('Make_Train_Val_Test_Splits_Session').getOrCreate()
     #Either 'small' or 'large' should be passed through -> sys.argv[1]
     dataset_size = sys.argv[1]
-    main(spark, dataset_size) 
+    if dataset_size not in ['small','large']:
+        print("Terminating, you must enter 'small' or 'large'")
+    else:
+        main(spark, dataset_size) 
    
