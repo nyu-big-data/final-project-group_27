@@ -12,38 +12,28 @@ def main(spark, dataset_size):
     """
     #Grab releveant file path
     filepath = const.HPC_DATA_FILEPATH
-    print(f"file_path: {filepath}")
     
     #Initialize DataPreprocessor Object
     data = DataPreprocessor(spark,filepath)
                
-    #Ideally Preprocess Data Something Like this:
-    print(f"file_path: {filepath}")
-
-    #THIS IS A TEST - REMOVE LATER - Call clean_data 
-    clean_data = data.clean_data()
-
     print(f"Splitting Train/Val/Test for {filepath}")
-    #THIS IS A TEST - REMOVE LATER - Call train/test/val splits
-    train, val, test = data.create_train_val_test_splits(clean_data=clean_data)
+    #Call train/test/val splits - Returns train, val, test data splits
+    train, val, test = data.preprocess()
+
     #Output Train/Test/Val Splits into Data_partitions
     print(f"Saving train/val/test splits to {const.HPC_DATA_FILEPATH}")
     train.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_train")
     val.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_small_val")
     test.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}_test")
+
+    #Let us know when done
     print("Finished Saving")
-
-    print(f"Running data.preprocess() for {filepath}")
-    #THIS IS A TEST - REMOVE LATER
-    data.preprocess()        
-
-    #Let us know when its done
-    print(f"Done for dataset {filepath}")
 
 # Only enter this block if we're in main
 if __name__ == "__main__":
     #Initalize spark session
-    spark = SparkSession.builder.appName('Spark_Session_Name').getOrCreate()
+    spark = SparkSession.builder.appName('Make_Train_Val_Test_Splits_Session').getOrCreate()
+    #Either 'small' or 'large' should be passed through -> sys.argv[1]
     dataset_size = sys.argv[1]
-    main(spark, dataset_size) #Either 'small' or 'large' should be passed through
+    main(spark, dataset_size) 
    

@@ -5,41 +5,31 @@ import pyspark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.window import Window
-from pyspark.ml.evaluation import RegressionEvaluator
-from pyspark.ml.recommendation import ALS
 from pyspark.sql import Row
-from pyspark.sql.types import StringType,BooleanType,DateType,IntegerType
+from pyspark.sql.types import IntegerType
 
-# And pyspark.sql to get the spark session
-# from pyspark.sql import SparkSession
-
-
-#A class used to preprocess data
-#And save out data to Data_Partitions Folder
+#A class used to preprocess data and to return train/val/test splits
 class DataPreprocessor():
     def __init__(self, spark, file_path) -> None:
-        self.spark = spark
+        self.spark = spark                              #Spark Driver
         self.file_path = file_path                      #File Path to Read in Data
 
+
+    #Main Method - Call this in partition_data.py to get train/val/test splits returned
     def preprocess(self):
         """
         Goal: Save train/val/test splits to netID/scratch - all using self methods
         Step 1: self.clean_data: clean the data, format timestamp to date, and remove duplicate movie titles
         Step 2: self.create_train_val_test_splits: reformats data, drops nans, and returns train,val and test splits
         """
-        #Format Date Time
-
-        #Deduplicate Data
+        #Format Date Time and Deduplicate Data
         clean_data = self.clean_data()                                                  #No args need to be passed, returns RDD of joined data (movies,ratings), without duplicates
         #Get Utility Matrix
         train, val, test = self.create_train_val_test_splits(clean_data)                #Needs clean_data to run, returns train/val/test splits
-        #Fit and run model
-        #TO DO: FIGURE OUT HOW TO GET VAL SPLIT IN THERE
-        userRecs, movieRecs = self.fit_and_run(train,val,test)        #returns userRecs - top N movies for users, movieRecs - top N users for movies
-        
         #Return top 100 recs for movies / users
-        return userRecs, movieRecs
+        return train, val, test
     
+    #preprocess calls this function
     def clean_data(self):
         """
         goal: for movie titles with multiple movieIDs, in the movies dataset,
@@ -96,20 +86,19 @@ class DataPreprocessor():
         cleaned_dupes = dupes.where(dupes.movieId.isin(ids))
         
         #Get the union of the non_dupes and cleaned_dupes
-        all_data = non_dupes.union(cleaned_dupes)
+        clean_data = non_dupes.union(cleaned_dupes)
 
-        #For testing purposes should be 100,830
-        #print(f"The length of the combined and de-deduped joined data-set is: {len(all_data.collect())}")
+        #For testing purposes should be 100,830 for small dataset
+        #print(f"The length of the combined and de-deduped joined data-set is: {len(clean_data.collect())}")
 
-        #Drop nulls
+        #Return clean_data -> Type: Spark RDD Ready for more computation
+        return clean_data
 
-        #Return all_data -> Type: Spark RDD Ready for more computation
-        return all_data
-
+    #Create Train Test Val Splits - .preprocess() calls this function
     def create_train_val_test_splits(self, clean_data):
         """
         input: RDD created by joining ratings.csv and movies.csv - cleaned of duplicates and formatted accordingly
-        output: a sparse utility matrix, where rows are user ids and columns are movie titles
+        output: training 60%, val 20%, test 20% splits with colums cast to integer type and na's dropped
         """
         #Type Cast the cols to numeric
         ratings = clean_data.withColumn('movieId',col('movieId').cast(IntegerType())).withColumn("userId",col("userId").cast(IntegerType()))
@@ -120,26 +109,4 @@ class DataPreprocessor():
         # u = u.pivot(index='userId', columns = 'title', values ='rating')
         return training, val, test
 
-    def fit_and_run(self, training, val, test):
-        #Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
-        als = ALS(maxIter=5, regParam=0.01, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
-        #Fit the model
-        model = als.fit(training)
-
-        #Create predictions
-        predictions = model.transform(val)
-        #Evalaute Predictions
-        evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
-        #Calculate RMSE
-        rmse = evaluator.evaluate(predictions)
-
-        #Print out predictions
-        print(f"Root-mean-square error for Val = {rmse}")
-
-        # Generate top 10 movie recommendations for each user
-        userRecs = model.recommendForAllUsers(100)
-        # Generate top 10 user recommendations for each movie
-        movieRecs = model.recommendForAllItems(100)
-
-        #Return top 100 movie recs for each user, top 100 user recs for each movie
-        return userRecs, movieRecs
+    
