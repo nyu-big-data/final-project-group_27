@@ -66,14 +66,20 @@ class Model():
         als = ALS(maxIter=5, rank=5, regParam=0.01, nonnegative = False, seed=10, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
         #Fit the model
         model = als.fit(training)
-        #End time
+        #End time and calculate delta
         end = time.time()
-        time_elapsed = start - end
+        time_elapsed_train = end - start
 
+        #Time predictions as well
+        start = time.time()
         #Create predictions
         predictions = model.transform(val)
+        ebd = time.time()
+        time_elapsed_predict = end - start
+
         #Evalaute Predictions
         evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
+
         #Calculate RMSE
         rmse = evaluator.evaluate(predictions)
 
@@ -82,8 +88,8 @@ class Model():
 
         #Write our results and model parameters
         with open(self.results_file_path, 'a') as output_file:
-            print("Recording the following: Model, Train or Test, time_elapsed (to train), rmse, rank, maxIter, regParam, nonnegative")
-            output_file.write(f"ALS Model, {predicted_set},{time_elapsed},{rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
+            print("Recording the following: Net ID, Time When it Ran, Model Type, Set Predicted, Train Time, Predict Time, RMSE, Rank, MaxIter, RegParam, NonNegative")
+            output_file.write(f"{const.netID},{time.time()},ALS Model, {predicted_set},{time_elapsed_train},{time_elapsed_predict},{rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
 
         # Generate top 10 movie recommendations for each user
         userRecs = model.recommendForAllUsers(self.num_recs)
