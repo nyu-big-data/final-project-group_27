@@ -184,5 +184,16 @@ class DataPreprocessor():
         returnFlag: boolean - True means test and val splits are disjoint on userId
         """
 
+        #Get observatio counts for training, val, and test sets
+        training_obs = train.count()
+        val_obs = val.count()
+        test_obs = test.count()
 
-        pass
+        #Print them out
+        print(f"Training Data Length: {training_obs} Val Len: {val_obs}, Test Len: {test_obs}")
+
+        #Check if there are any overlapping_ids in the sets
+        overllaping_ids = val.join(test, test.userId==val.userId,how='inner').count()
+        
+        #Return True if they're disjoint, False if there's overlap
+        return overllaping_ids == 0
