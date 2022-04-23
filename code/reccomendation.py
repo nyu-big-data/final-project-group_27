@@ -62,5 +62,23 @@ class ReccomendationSystem:
         #return first n most popular movies
         return self.data.mean().sort(ascending = False).index()[:self.keepNum]
 
+    def spark_popularity_query(self):
+        """
+        query for grabbing popularity recommendation from spark
+        """
+        #create temp view
+        data_ = spark.read_json(self.data)
+        data =createOrReplaceTempView('data_')
+
+        counts = data.agg((count(col(c))for c in data.columns))
+
+        average_rating = data.agg((mean(col(c)) for c in data.columns))
+
+        newdf=spark.createDataFrame({"movie":data.columns,"counts":counts,"average_rating":average_rating})
+
+        out_array=np.array(newdf.filter(newdf.counts >= self.min_reviews).desc("average_rating").select("movies").collect())[:self.keepNum]
+
+        return out_array
+
 
 #Some change
