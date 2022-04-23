@@ -85,14 +85,7 @@ class DataPreprocessor():
         ids = list(max_dupes.toPandas()['movieId'])
         cleaned_dupes = dupes.where(dupes.movieId.isin(ids))
         
-
-        """
-        Syntactical Change: reorder columns in cleaned dupes to match the order of non_dupes
-        that way the union will successfully add rows of the right columns to the non_dupes table.
-        
-        I think you correct for this with the type casting and dropping of nulls in the next function
-        so there's no tangible impact
-        """
+        #Reorder Columns so union works
         cleaned_dupes = cleaned_dupes.select('rating', 'userId', 'movieId', 'date', 'title')
 
         
@@ -114,35 +107,33 @@ class DataPreprocessor():
     #Create Train Test Val Splits - .preprocess() calls this function
     def create_train_val_test_splits(self, clean_data):
         """
+        Procedure: 
+        Create two columns - the first will measure the specific row count for a specific user
+        the other will be static fixed at the total number of reviews for that user. The row count
+        is sorted by date ascending, so the first row is the oldest review.
+        
+        Then, subset training to be where row_count <= .6 *length, grabbing the oldest 60% of reviews, for
+        all users.
+        
+        We then subset the remaining data into a hold out, with the goal of creating two disjoint validation
+        and test data sets when looking at userId (meaning they should not have any shared userId values), 
+        but still have roughly the same amount of data, or whatever percentage we want to achieve
+        
+        To obtain approximate equality and disjoint userId membership, for the remiaining data
+        sort userId by user_review_count descending, then alternate values in that list, assigning
+        half to test and half to validation.
+        -----
         input: RDD created by joining ratings.csv and movies.csv - cleaned of duplicates and formatted accordingly
+        -----
+        -----
         output: training 60%, val 20%, test 20% splits with colums cast to integer type and na's dropped
+        -----
         """
         #Type Cast the cols to numeric
         ratings = clean_data.withColumn('movieId',col('movieId').cast(IntegerType())).withColumn("userId",col("userId").cast(IntegerType()))
         #Drop nulls
         ratings = ratings.na.drop("any")
-           
-        """
-        Joby Logic: Create two columns, one will measure the specific row count for a specific user
-        the other will be static fixed at the total number of reviews for that user
-        
-        row count is sorted by date, meaning row 1 is the oldest review
-        
-        we subset training to be where row_count <= .6 *length, grabbing the earliest 60% of reviews, for
-        all users
-        
-        we subset the remaining data into a hold out, with the goal of creating two disjoint validation
-        and test data sets when looking at userId (meaning they should not have any shared userId values), 
-        but still have roughly the same amount of data, or whatever percentage we want to achieve
-        
-        to obtain approximate equality and disjoint userId membership, for the remiaining data
-        sort userId by user_review_count descending, then alternate values in that list, assigning
-        half to test and half to validation.
-        
-
-        create test/validation set by selecting userId.isin(validation_userId_list), and those
-        not in the list
-        """
+    
         #strategy, partition by userId, and userId order by date, 
         #take the first 60% of reviews for all users
         w1 = Window.partitionBy("userId")
