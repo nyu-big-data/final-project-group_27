@@ -45,7 +45,7 @@ class Model():
 
 
     #This method uses the Alternating Least Squares Pyspark Class to fit and run a model
-    def ALS_fit_and_run(self, training, val, test):
+    def ALS_fit_and_run(self, training=None, val=None, test=None):
         """
         -----
         Input: train,val,test sets
@@ -53,14 +53,19 @@ class Model():
         Output: userRecs, movieRecs - list of Top self.num_recs long for reccommendations
         -----
         """
+        
+        #Record dummy variable (used later in writing results) if we're evaluating Val or Test predictions
+        if val:
+            predicted_set = "Val"
+        else:
+            predicted_set = "Test"
+
         #Time the function start to finish
         start = time.time()
-
         #Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
         als = ALS(maxIter=5, rank=5, regParam=0.01, nonnegative = False, seed=10, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
         #Fit the model
         model = als.fit(training)
-        
         #End time
         end = time.time()
         time_elapsed = start - end
@@ -77,8 +82,8 @@ class Model():
 
         #Write our results and model parameters
         with open(self.results_file_path, 'a') as output_file:
-            print("Recording the following: Model, time_elapsed (to train), rmse, rank, maxIter, regParam, nonnegative")
-            output_file.write(f"ALS Model, {time_elapsed},{rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
+            print("Recording the following: Model, Train or Test, time_elapsed (to train), rmse, rank, maxIter, regParam, nonnegative")
+            output_file.write(f"ALS Model, {predicted_set},{time_elapsed},{rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
 
         # Generate top 10 movie recommendations for each user
         userRecs = model.recommendForAllUsers(self.num_recs)
