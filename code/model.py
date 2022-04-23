@@ -5,8 +5,7 @@ import pyspark
 from pyspark.sql import SparkSession
 from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.recommendation import ALS
-import inspect
-
+import time
 class Model():
     """
     Abstract Model class that will contain various methods to deploy collaborative filtering.
@@ -30,15 +29,14 @@ class Model():
     """
 
     #Constructor for Model
-    def __init__(self, rank=10, maxIter=5,regParam=0.01, \
-                    seed=10,nonnegative=True,alpha=1,model_save=False, \
-                    num_recs=100):
+    def __init__(self, rank=10, maxIter=5, regParam=0.01, seed=10, nonnegative=True, \
+                                            alpha=1, model_save=False, num_recs=100):
         #Model Attributes                    
         self.rank = rank                                                                    #Rank of latent factors used in decomposition
         self.maxIter = maxIter                                                              #Number of iterations to run algorithm, recommended 5-20
         self.regParam = regParam                                                            #Regularization Parameter
         self.seed = seed                                                                    #Random seed - default set to 10 for reproducibility
-        self.nonnegative = nonnegative                                                      #Flag as to whether or not outputs can be negative or positive
+        self.nonnegative = nonnegative                                                      #Flag as to whether or not outputs can be negative or positive - default False
         self.alpha = alpha                                                                  #Alpha parameter in case we do any implicitFeedback methods
         self.num_recs = num_recs                                                            #Top X number of reccomendations to return
         self.model_save = model_save                                                        #Flag used to determine whether or not we should save our model somewhere
@@ -55,11 +53,17 @@ class Model():
         Output: userRecs, movieRecs - list of Top self.num_recs long for reccommendations
         -----
         """
+        #Time the function start to finish
+        start = time.time()
 
         #Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
-        als = ALS(maxIter=5, rank=5, regParam=0.01, nonnegative = True, seed=10, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
+        als = ALS(maxIter=5, rank=5, regParam=0.01, nonnegative = False, seed=10, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
         #Fit the model
         model = als.fit(training)
+        
+        #End time
+        end = time.time()
+        time_elapsed = start - end
 
         #Create predictions
         predictions = model.transform(val)
@@ -73,8 +77,8 @@ class Model():
 
         #Write our results and model parameters
         with open(self.results_file_path, 'a') as output_file:
-            print("Recording the following: Model, rmse, rank, maxIter, regParam, nonnegative")
-            output_file.write(f"ALS Model, {rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
+            print("Recording the following: Model, time_elapsed (to train), rmse, rank, maxIter, regParam, nonnegative")
+            output_file.write(f"ALS Model, {time_elapsed},{rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
 
         # Generate top 10 movie recommendations for each user
         userRecs = model.recommendForAllUsers(self.num_recs)
@@ -83,7 +87,7 @@ class Model():
 
         #Save model if we need to
         if self.model_save:
-            self.save_model(als)
+            self.save_model(model_type="ALS", model=als)
 
         #Return top self.num_recs movie recs for each user, top self.num_recs user recs for each movie
         return userRecs, movieRecs
@@ -93,5 +97,17 @@ class Model():
         pass
 
     #Method to save model to const.MODEL_SAVE_FILE_PATH
-    def save_model(self, model):
-        model.save(const.MODEL_SAVE_FILE_PATH)
+    def save_model(self, model_type=None, model=None):
+        """
+        Inputs:
+        -----
+        model_type: str - string designating what type of model is being saved
+        model: obj - model object that has .save method
+        -----
+        """
+        #Make sure a non-null object was passed
+        if model:
+            model.save(const.MODEL_SAVE_FILE_PATH + model_type)
+        #Otherwise throw error
+        else:
+            raise Exception("Model not passed through")

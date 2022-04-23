@@ -88,6 +88,9 @@ class DataPreprocessor():
         #Get the union of the non_dupes and cleaned_dupes
         clean_data = non_dupes.union(cleaned_dupes)
 
+        #Subtract 2.5 from each review to create negative reviews
+        clean_data = clean_data.withColumn("rating",col("rating")-2.5)
+        
         #For testing purposes should be 100,830 for small dataset
         #print(f"The length of the combined and de-deduped joined data-set is: {len(clean_data.collect())}")
 
