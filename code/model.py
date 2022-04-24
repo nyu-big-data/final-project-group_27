@@ -63,10 +63,10 @@ class Model():
         #Record dummy variable (used later in writing and evaluating results) if we're evaluating Val or Test predictions
         if val:
             predicted_set = "Val" #Gets written out by record_metrics
-            input = val #Input gets passed to evaluator as labels
+            predicted_data = val #Input gets passed to evaluator as labels
         else:
             predicted_set = "Test" #Gets written out by record_metrics
-            input = test #Input gets passed to evaluator as labels
+            predicted_data = test #Input gets passed to evaluator as labels
 
         #Time the function start to finish
         start = time.time()
@@ -83,7 +83,7 @@ class Model():
         #Time predictions as well
         start = time.time()
         #Create predictions
-        predictions = model.transform(input)
+        predictions = model.transform(predicted_data)
         end = time.time()
         time_elapsed_predict = end - start
 
@@ -104,7 +104,7 @@ class Model():
                         "Random Seed":self.seed}
 
         #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
-        self.record_metrics(predictions, labels=input,model_params=model_params)
+        self.record_metrics(predictions, labels=predicted_data,model_params=model_params)
         
         # Generate top 10 movie recommendations for each user
         userRecs = model.recommendForAllUsers(self.num_recs)
