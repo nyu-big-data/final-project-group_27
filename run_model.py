@@ -41,7 +41,7 @@ if __name__ == '__main__':
     1) model size -> either "small" or "large"
     2) model type -> either "baseline" or "als" (More to Do)
     3) Dictionary of {parameter:argument} pairs that will be parsed to the model
-    i.e. '{"rank":10, "maxIter"=10,"regParam":0.05}'
+    i.e. '{"rank":10, "maxIter":10,"regParam":0.05}'
     """
     #Initialize spark context
     spark = SparkSession.builder.appName('Run_Model').getOrCreate()
@@ -50,5 +50,6 @@ if __name__ == '__main__':
     #Define the model type in second argument:
     model_type = sys.argv[2]
     #Model Args:
-    model_args = json.loads(sys.argv[3])
+    params = sys.argv[3]
+    model_args = json.loads(params)
     main(spark, model_size,model_type,model_args)
