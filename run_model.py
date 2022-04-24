@@ -1,3 +1,5 @@
+from email import header
+from msilib import schema
 from pyspark.sql import SparkSession
 from code.model import Model
 import code.constants as const
@@ -14,9 +16,12 @@ def main(spark, model_size,model_type,model_args):
     val_file_path = const.HPC_DATA_FILEPATH + model_size + "val.csv"
     
     #Read data for file paths
-    train = spark.read.csv(train_file_path)
-    test = spark.read.csv(test_file_path) #Ignore this during validation tuning
-    val = spark.read.csv(val_file_path)
+    train = spark.read.csv(train_file_path, header=True, \
+                            schema='rating DOUBLE, userId INT, date STRING, title STRING, row_num INT, length INT')
+    test = spark.read.csv(test_file_path, header=True, \
+                            schema = 'rating DOUBLE, userId INT, date STRING, title STRING, row_num INT, length INT') 
+    val = spark.read.csv(val_file_path, header=True, \
+                            schema='rating DOUBLE, userId INT, date STRING, title STRING, row_num INT, length INT')
     print("Data Read Successfully")
 
     print(f"Args being passed to model: {model_args.items()}")
