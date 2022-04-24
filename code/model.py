@@ -5,6 +5,7 @@ import pyspark
 from pyspark.sql import SparkSession
 from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.recommendation import ALS
+from pyspark.mllib.evaluation import RankingMetrics 
 import time
 class Model():
     """
@@ -57,8 +58,10 @@ class Model():
         #Record dummy variable (used later in writing results) if we're evaluating Val or Test predictions
         if val:
             predicted_set = "Val"
+            input = val
         else:
             predicted_set = "Test"
+            input = test
 
         #Time the function start to finish
         start = time.time()
@@ -73,23 +76,17 @@ class Model():
         #Time predictions as well
         start = time.time()
         #Create predictions
-        predictions = model.transform(val)
+        predictions = model.transform(input)
         ebd = time.time()
         time_elapsed_predict = end - start
-
-        #Evalaute Predictions
-        evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
-
-        #Calculate RMSE
-        rmse = evaluator.evaluate(predictions)
-
-        #Print out predictions
-        print(f"Root-mean-square error for Val = {rmse}")
-
-        #Write our results and model parameters
-        with open(self.results_file_path, 'a') as output_file:
-            print("Recording the following: Net ID, Time When it Ran, Model Type, Set Predicted, Train Time, Predict Time, RMSE, Rank, MaxIter, RegParam, NonNegative")
-            output_file.write(f"{const.netID},{time.time()},ALS Model, {predicted_set},{time_elapsed_train},{time_elapsed_predict},{rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
+        
+        #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
+        self.record_metrics(predictions, input,model="ALS",\
+                            predicted_set=predicted_set,time_elapsed_train=time_elapsed_train,\
+                            time_elapsed_predict=time_elapsed_predict)
+        #Ranking metrics test
+        metrics = RankingMetrics(model) #expects: predictionAndLabels : :py:class:`pyspark.RDD`an RDD of (predicted ranking, ground truth set) pairs.
+        #average_precision = metrics.meanAveragePrecision(10)
 
         # Generate top 10 movie recommendations for each user
         userRecs = model.recommendForAllUsers(self.num_recs)
@@ -106,6 +103,39 @@ class Model():
     #Baseline model that returns top X most popular items (highest avg rating)
     def baseline(self, training, val, test):
         pass
+    
+    def record_metrics(self, predictions,labels, model,predicted_set,time_elapsed_train, time_elapsed_predict):
+        """
+        Method that will contain all the code to evaluate model on metrics: RMSE, R^2, Precistion At K, Mean Precision, and NDGC
+        input:
+        -----
+        predictions:
+        labels:
+        mode: String - Type of model being evaluated
+        predicted_set: String - Which set are we making predictions on? Either Val or Test
+        time_elapsed_train: time.time() - How long it took the model to train
+        time_elapsed_predict: time.time() - How long it took the model to predict
+        -----
+        returns: None - but writes the results to results.txt in /gjd9961/scratch/big_data_final_results/results.txt
+        """
+
+        #Evalaute Predictions
+
+        evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
+        #Calculate RMSE
+        rmse = evaluator.evaluate(predictions)
+
+        #Print out predictions
+        print(f"Root-mean-square error for Val = {rmse}")
+
+
+        ## TO DO: record results for Precistion at K, Mean Precision, and NDGC
+        #Write our results and model parameters
+        with open(self.results_file_path, 'a') as output_file:
+            print("Recording the following: Net ID, Time When it Ran, Model Type, Set Predicted, Train Time, Predict Time, RMSE, Rank, MaxIter, RegParam, NonNegative")
+            output_file.write(f"{const.netID},{time.time()},ALS Model, \
+                {predicted_set},{time_elapsed_train},{time_elapsed_predict},\
+                    {rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
 
     #Method to save model to const.MODEL_SAVE_FILE_PATH
     def save_model(self, model_type=None, model=None):
