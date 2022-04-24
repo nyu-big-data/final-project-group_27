@@ -46,10 +46,9 @@ if __name__ == '__main__':
     #Initialize spark context
     spark = SparkSession.builder.appName('Run_Model').getOrCreate()
     #Model size is either "small" or "large"
-    model_size = sys.argv[1]+"_"
+    model_size = sys.argv[1]+"-"
     #Define the model type in second argument:
     model_type = sys.argv[2]
     #Model Args:
-    params = sys.argv[3]
-    model_args = json.loads(params)
+    model_args = json.loads(sys.argv[3])
     main(spark, model_size,model_type,model_args)
