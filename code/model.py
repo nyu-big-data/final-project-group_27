@@ -46,7 +46,7 @@ class Model():
 
 
     #This method uses the Alternating Least Squares Pyspark Class to fit and run a model
-    def ALS_fit_and_run(self, training=None, val=None, test=None):
+    def ALS_fit_and_predict(self, training=None, val=None, test=None):
         """
         -----
         Input: train,val,test sets
@@ -80,14 +80,23 @@ class Model():
         ebd = time.time()
         time_elapsed_predict = end - start
         
-        #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
-        self.record_metrics(predictions, input,model="ALS",\
-                            predicted_set=predicted_set,time_elapsed_train=time_elapsed_train,\
-                            time_elapsed_predict=time_elapsed_predict)
-        #Ranking metrics test
-        metrics = RankingMetrics(model) #expects: predictionAndLabels : :py:class:`pyspark.RDD`an RDD of (predicted ranking, ground truth set) pairs.
-        #average_precision = metrics.meanAveragePrecision(10)
+        #Package Parameters into a dictionary to ease recording
+        print("Recording the following: Net ID, Time When it Ran, Model Type, Set Predicted, Train Time, Predict Time, RMSE, Rank, MaxIter, RegParam, NonNegative")
+        model_params = {"Net ID": const.netID,
+                        "Time when it ran":time.time(),
+                        "model_type":"ALS",
+                        "predicted_set":predicted_set,
+                        "time_elapsed_train":time_elapsed_train,
+                        "time_elapsed_predict": time_elapsed_predict,
+                        "Rank":self.rank,
+                        "maxIter":self.maxIter,
+                        "regParam":self.regParam,
+                        "NonNegative":self.nonnegative,
+                        "Random Seed":self.seed}
 
+        #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
+        self.record_metrics(predictions, input,model_params=model_params)
+        
         # Generate top 10 movie recommendations for each user
         userRecs = model.recommendForAllUsers(self.num_recs)
         # Generate top 10 user recommendations for each movie
@@ -104,38 +113,36 @@ class Model():
     def baseline(self, training, val, test):
         pass
     
-    def record_metrics(self, predictions,labels, model,predicted_set,time_elapsed_train, time_elapsed_predict):
+    def record_metrics(self, predictions,labels, param_dict):
         """
         Method that will contain all the code to evaluate model on metrics: RMSE, R^2, Precistion At K, Mean Precision, and NDGC
         input:
         -----
         predictions:
         labels:
-        mode: String - Type of model being evaluated
-        predicted_set: String - Which set are we making predictions on? Either Val or Test
-        time_elapsed_train: time.time() - How long it took the model to train
-        time_elapsed_predict: time.time() - How long it took the model to predict
+        param_dict: dict - stores all the params passed to model that we will record
         -----
         returns: None - but writes the results to results.txt in /gjd9961/scratch/big_data_final_results/results.txt
         """
 
-        #Evalaute Predictions
-
+        #Evalaute Predictions for Regression Task
         evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
         #Calculate RMSE
         rmse = evaluator.evaluate(predictions)
-
-        #Print out predictions
-        print(f"Root-mean-square error for Val = {rmse}")
+        #TO DO: GET r^2 value
+        # r_2 = something 
+        
+        ## TO DO: Build out Precision at K, Mean Precision, and NDGC
+        #Ranking metrics test
+        #metrics = RankingMetrics(model) #expects: predictionAndLabels : :py:class:`pyspark.RDD`an RDD of (predicted ranking, ground truth set) pairs.
+        #average_precision = metrics.meanAveragePrecision(10)
 
 
         ## TO DO: record results for Precistion at K, Mean Precision, and NDGC
         #Write our results and model parameters
         with open(self.results_file_path, 'a') as output_file:
-            print("Recording the following: Net ID, Time When it Ran, Model Type, Set Predicted, Train Time, Predict Time, RMSE, Rank, MaxIter, RegParam, NonNegative")
-            output_file.write(f"{const.netID},{time.time()},ALS Model, \
-                {predicted_set},{time_elapsed_train},{time_elapsed_predict},\
-                    {rmse},{self.rank},{self.maxIter},{self.regParam},{self.nonnegative}")
+            print("Recording the following: model_params")
+            output_file.write(f"")
 
     #Method to save model to const.MODEL_SAVE_FILE_PATH
     def save_model(self, model_type=None, model=None):
@@ -147,8 +154,8 @@ class Model():
         -----
         """
         #Make sure a non-null object was passed
-        if model:
+        if model and model_type:
             model.save(const.MODEL_SAVE_FILE_PATH + model_type)
         #Otherwise throw error
         else:
-            raise Exception("Model not passed through")
+            raise Exception("Model and or Model_type not passed through")

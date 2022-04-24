@@ -28,7 +28,7 @@ def main(spark, model_size,model_type,model_args):
     if model_type == 'als':
         #IMPORTANT: I HAVE THIS CURRENTLY ONLY PREICTING AND MEASURING ERROR ON VAL - WHEN WE'RE DONE TUNING AND EVALUATING
         #RESULTS WE'LL HAVE TO GO INTO Als_fit_and_run AND CHANGE THE CODE!
-        userRecs, movieRecs = reccomender_system.ALS_fit_and_run(training=train,val=val)
+        userRecs, movieRecs = reccomender_system.ALS_fit_and_predict(training=train,val=val)
 
     #If baseline... you guessed it, use baseline
     elif model_type == 'baseline':
