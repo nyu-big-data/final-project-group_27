@@ -50,6 +50,9 @@ class Model():
     #This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def ALS_fit_and_predict(self, training=None, val=None, test=None):
         """
+        Builds and fits an ALS latent factor model. Calls self.record_metrics(precitions,labels,model_params)
+        to record the results. Some dummy variables are made to record whether or not we are using the validation set
+        or the testing set. This will help us record our results accurately. Training and predicting are also timed. 
         -----
         Input: train,val,test sets
         -----
@@ -57,18 +60,20 @@ class Model():
         -----
         """
         
-        #Record dummy variable (used later in writing results) if we're evaluating Val or Test predictions
+        #Record dummy variable (used later in writing and evaluating results) if we're evaluating Val or Test predictions
         if val:
-            predicted_set = "Val"
-            input = val
+            predicted_set = "Val" #Gets written out by record_metrics
+            input = val #Input gets passed to evaluator as labels
         else:
-            predicted_set = "Test"
-            input = test
+            predicted_set = "Test" #Gets written out by record_metrics
+            input = test #Input gets passed to evaluator as labels
 
         #Time the function start to finish
         start = time.time()
         #Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
-        als = ALS(maxIter=self.maxIter, rank=self.rank, regParam=self.regParam, nonnegative = self.nonnegative, seed=self.seed, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
+        als = ALS(maxIter=self.maxIter, rank=self.rank, regParam=self.regParam,\
+                    nonnegative = self.nonnegative, seed=self.seed, userCol="userId", \
+                    itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
         #Fit the model
         model = als.fit(training)
         #End time and calculate delta
@@ -81,10 +86,13 @@ class Model():
         predictions = model.transform(input)
         ebd = time.time()
         time_elapsed_predict = end - start
-        
+
+        #Get when model was ran
+        now = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+
         #Package Parameters into a dictionary to ease recording
         model_params = {"Net ID": const.netID,
-                        "Time when it ran": datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+                        "Time when it ran": now,
                         "model_type":"ALS",
                         "predicted_set":predicted_set,
                         "time_elapsed_train":time_elapsed_train,
@@ -96,7 +104,7 @@ class Model():
                         "Random Seed":self.seed}
 
         #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
-        self.record_metrics(predictions, input,model_params=model_params)
+        self.record_metrics(predictions, labels=input,model_params=model_params)
         
         # Generate top 10 movie recommendations for each user
         userRecs = model.recommendForAllUsers(self.num_recs)
