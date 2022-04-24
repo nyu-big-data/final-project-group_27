@@ -15,11 +15,11 @@ def main(spark, model_size,model_type,model_args):
     
     #Read data for file paths
     train = spark.read.csv(train_file_path, header=True, \
-                            schema='rating DOUBLE, userId INT, date STRING, title STRING, row_num INT, length INT')
+                            schema='rating DOUBLE, userId INT, moveId INT, date STRING, title STRING, row_num INT, length INT')
     test = spark.read.csv(test_file_path, header=True, \
-                            schema = 'rating DOUBLE, userId INT, date STRING, title STRING, row_num INT, length INT') 
+                            schema = 'rating DOUBLE, userId INT, moveId INT, date STRING, title STRING, row_num INT, length INT') 
     val = spark.read.csv(val_file_path, header=True, \
-                            schema='rating DOUBLE, userId INT, date STRING, title STRING, row_num INT, length INT')
+                            schema='rating DOUBLE, userId INT, moveId INT, date STRING, title STRING, row_num INT, length INT')
     print("Data Read Successfully")
 
     print(f"Args being passed to model: {model_args.items()}")
