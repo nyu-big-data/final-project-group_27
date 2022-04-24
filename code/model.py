@@ -63,7 +63,7 @@ class Model():
         #Time the function start to finish
         start = time.time()
         #Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
-        als = ALS(maxIter=5, rank=5, regParam=0.01, nonnegative = False, seed=10, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
+        als = ALS(maxIter=self.maxIter, rank=self.rank, regParam=self.regParam, nonnegative = self.nonnegative, seed=self.seed, userCol="userId", itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
         #Fit the model
         model = als.fit(training)
         #End time and calculate delta

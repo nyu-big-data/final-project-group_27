@@ -117,6 +117,9 @@ class DataPreprocessor():
         #For testing purposes should be 100,830 for small dataset
         #print(f"The length of the combined and de-deduped joined data-set is: {len(clean_data.collect())}")
 
+        #Repartition for efficiency:
+        clean_data = clean_data.repartition(10)
+
         #Return clean_data -> Type: Spark RDD Ready for more computation
         return clean_data
 
@@ -180,6 +183,10 @@ class DataPreprocessor():
         val = holdout_df.filter(holdout_df.userId.isin(val_users))
         test = holdout_df.filter(~holdout_df.userId.isin(val_users))
 
+        #Repartition for efficiency
+        training = training.repartition(10)
+        val = val.repartition(10)
+        test = test.repartition(10)
         #Return train/val/test splits
         return training, val, test
 
@@ -210,7 +217,7 @@ class DataPreprocessor():
 
         #Print them out
         print(f"Training Data Len: {training_obs} Val Len: {val_obs}, Test Len: {test_obs}")
-
+        print(f"Partitions, Train: {train.rdd.getNumPartitions()}, Val: {val.rdd.getNumPartitions()}, Test: {test.rdd.getNumPartitions()}")
         #Check if there are any overlapping_ids in the sets
         overllaping_ids = val.join(test, test.userId==val.userId,how='inner').count()
         
