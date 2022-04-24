@@ -84,7 +84,7 @@ class Model():
         start = time.time()
         #Create predictions
         predictions = model.transform(input)
-        ebd = time.time()
+        end = time.time()
         time_elapsed_predict = end - start
 
         #Get when model was ran
