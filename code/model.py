@@ -122,7 +122,7 @@ class Model():
     def baseline(self, training, val, test):
         pass
     
-    def record_metrics(self, predictions,labels, param_dict):
+    def record_metrics(self, predictions,labels, model_params):
         """
         Method that will contain all the code to evaluate model on metrics: RMSE, R^2, Precistion At K, Mean Precision, and NDGC
         input:
@@ -153,7 +153,7 @@ class Model():
         #Package our model parameters and metrics neatly so its easy to write
         metrics = [rmse, r_2, average_precision, precision_at_k, ndgc]
         #Convert dictionary values to list
-        model_args = list(param_dict.values())
+        model_args = list(model_params.values())
         #Add the metrics to our list - in place
         model_args.extend(metrics)
 
