@@ -7,6 +7,9 @@ from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.recommendation import ALS
 from pyspark.mllib.evaluation import RankingMetrics 
 import time
+from datetime import datetime
+
+
 class Model():
     """
     Abstract Model class that will contain various methods to deploy collaborative filtering.
@@ -44,7 +47,6 @@ class Model():
         self.model_save_path = const.MODEL_SAVE_FILE_PATH                                   #NO Arg needed to be passed thorugh
         self.results_file_path = const.RESULTS_SAVE_FILE_PATH                               #Filepath to write model results like rmse and model params
 
-
     #This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def ALS_fit_and_predict(self, training=None, val=None, test=None):
         """
@@ -81,9 +83,8 @@ class Model():
         time_elapsed_predict = end - start
         
         #Package Parameters into a dictionary to ease recording
-        print("Recording the following: Net ID, Time When it Ran, Model Type, Set Predicted, Train Time, Predict Time, RMSE, Rank, MaxIter, RegParam, NonNegative")
         model_params = {"Net ID": const.netID,
-                        "Time when it ran":time.time(),
+                        "Time when it ran": datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
                         "model_type":"ALS",
                         "predicted_set":predicted_set,
                         "time_elapsed_train":time_elapsed_train,
@@ -124,25 +125,37 @@ class Model():
         -----
         returns: None - but writes the results to results.txt in /gjd9961/scratch/big_data_final_results/results.txt
         """
-
+        
         #Evalaute Predictions for Regression Task
         evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
         #Calculate RMSE
         rmse = evaluator.evaluate(predictions)
         #TO DO: GET r^2 value
-        # r_2 = something 
+        r_2 = "test" #Replace
         
         ## TO DO: Build out Precision at K, Mean Precision, and NDGC
         #Ranking metrics test
         #metrics = RankingMetrics(model) #expects: predictionAndLabels : :py:class:`pyspark.RDD`an RDD of (predicted ranking, ground truth set) pairs.
-        #average_precision = metrics.meanAveragePrecision(10)
+        average_precision = 'test' #Replace
+        precision_at_k = "test" #Replace
+        ndgc = "test" #Replace
 
 
-        ## TO DO: record results for Precistion at K, Mean Precision, and NDGC
+
+        #Package our model parameters and metrics neatly so its easy to write
+        metrics = [rmse, r_2, average_precision, precision_at_k, ndgc]
+        #Convert dictionary values to list
+        model_args = list(param_dict.values())
+        #Add the metrics to our list - in place
+        model_args.extend(metrics)
+
         #Write our results and model parameters
+        print("Recording the following: model_params")
         with open(self.results_file_path, 'a') as output_file:
-            print("Recording the following: model_params")
-            output_file.write(f"")
+            #Write each element of metrics seperated by a comma, for the last one use a new line character
+            for i in range(len(model_args)-1):
+                output_file.write(f"{model_args[i]},") 
+            output_file.write(f"{model_args[-1]}\n")           
 
     #Method to save model to const.MODEL_SAVE_FILE_PATH
     def save_model(self, model_type=None, model=None):
