@@ -39,7 +39,7 @@ class Model():
 
     #Constructor for Model
     def __init__(self, rank=10, maxIter=5, regParam=0.01, seed=10, nonnegative=True, \
-                                            alpha=1, model_save=False, num_recs=100):
+                                            alpha=1, model_save=False, num_recs=100, min_reviews =10 ):
         #Model Attributes                    
         self.rank = rank                                                                    #Rank of latent factors used in decomposition
         self.maxIter = maxIter                                                              #Number of iterations to run algorithm, recommended 5-20
@@ -51,8 +51,9 @@ class Model():
         self.model_save = model_save                                                        #Flag used to determine whether or not we should save our model somewhere
         self.model_save_path = const.MODEL_SAVE_FILE_PATH                                   #NO Arg needed to be passed thorugh
         self.results_file_path = const.RESULTS_SAVE_FILE_PATH                               #Filepath to write model results like rmse and model params
-
-    #This method uses the Alternating Least Squares Pyspark Class to fit and run a model
+        self.min_reviews = min_reviews                                                      #minimum number of reviews to qualify for baseline
+        
+        #This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def ALS_fit_and_predict(self, training=None, val=None, test=None):
         """
         Builds and fits an ALS latent factor model. Calls self.record_metrics(precitions,labels,model_params)
@@ -125,7 +126,19 @@ class Model():
 
     #Baseline model that returns top X most popular items (highest avg rating)
     def baseline(self, training, val, test):
-        pass
+        """
+        spark df: joined df with all user reviews
+        keepNum: how many of the most popular movies we want to keep (should be 100 it seems)
+        min_count: how many reviews a movie must have in order to be considered
+    
+        output: list of n movie titles where n=num_recs... future format tbd
+        """
+    
+        spark_df.createOrReplaceTempView("joined")
+        result = spark.sql(f"SELECT title, AVG(rating) as A, COUNT(userID) FROM joined GROUP BY movieID HAVING COUNT(userID)>={self.min_count} ORDER BY A DESC LIMIT {self.num_recs}")
+        out=result.select("movieID").collect()
+    
+        return(out)
     
     def record_metrics(self, predictions,labels, model_params):
         """
