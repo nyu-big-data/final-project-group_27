@@ -156,13 +156,16 @@ class Model():
         #Window function to partition reviews in the validation set by user id sort by date
         windowSpec_label = Window.partitionBy('userId').orderBy(col('date').desc())
 
-        #Grab oldest rows for each user - no filter needed on how many this returns
+        #Grab oldest watched movies for each user - Ouput RDD with cols userId, movieId where movieId is a list of watched movie ids -> [movieId,...]
         labels = labels.select('userId', 'movieId', 'date', rank().over(windowSpec_label).alias('rank')) \
                                     .groupBy('userId').agg(expr('collect_list(movieId) as items'))
+        #Order predictions by high confidence to low - Ouput RDD with cols userId, movieId where movieId is a list of reccomended movie ids -> [movieId,...]
+        prediction_subset = predictions.select('userId', 'movieId', 'prediction', rank().over(windowSpec_pred).alias('rank')) \
+                                        .groupBy('userId').agg(expr('collect_list(movieId) as movies'))
         
-
         #Calculate MAP over 100 recs at the end (The value is independent of K so we just do it once)
-        rankingMetrics = RankingMetrics(predictions)
+        labelsAndPredictions = prediction_subset.join(labels, 'userId').rdd.map(lambda row: (row[1], row[2]))
+        rankingMetrics = RankingMetrics(labelsAndPredictions)
         MAP = rankingMetrics.meanAveragePrecision #No function call necessary
         metrics.append(MAP)
 
