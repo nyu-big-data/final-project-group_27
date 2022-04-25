@@ -162,8 +162,7 @@ class Model():
         
 
         #Calculate MAP over 100 recs at the end (The value is independent of K so we just do it once)
-        labelsAndPredictions = predictions.join(labels, 'userId').rdd.map(lambda row: (row[1], row[2]))
-        rankingMetrics = RankingMetrics(labelsAndPredictions)
+        rankingMetrics = RankingMetrics(predictions)
         MAP = rankingMetrics.meanAveragePrecision #No function call necessary
         metrics.append(MAP)
 
