@@ -8,6 +8,11 @@ from pyspark.ml.recommendation import ALS
 from pyspark.mllib.evaluation import RankingMetrics 
 import time
 from datetime import datetime
+from pyspark.mllib.evaluation import RankingMetrics 
+from pyspark.sql import Row
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
+from pyspark.sql.functions import *
+from pyspark.sql.window import Window
 
 
 class Model():
@@ -134,24 +139,54 @@ class Model():
         returns: None - but writes the results to results.txt in /gjd9961/scratch/big_data_final_results/results.txt
         """
         
-        #Evalaute Predictions for Regression Task
-        evaluator = RegressionEvaluator(metricName="rmse", labelCol="rating", predictionCol="prediction")
-        #Calculate RMSE
-        rmse = evaluator.evaluate(predictions)
-        #TO DO: GET r^2 value
-        r_2 = "test" #Replace
-        
-        ## TO DO: Build out Precision at K, Mean Precision, and NDGC
-        #Ranking metrics test
-        #metrics = RankingMetrics(model) #expects: predictionAndLabels : :py:class:`pyspark.RDD`an RDD of (predicted ranking, ground truth set) pairs.
-        average_precision = 'test' #Replace
-        precision_at_k = "test" #Replace
-        ndgc = "test" #Replace
-
-
-
+        ##Evaluate Predictions for Regression Task##
+        evaluator = RegressionEvaluator(labelCol="rating", predictionCol="prediction")
+        #Calculate RMSE and r_2 metrics
+        rmse = evaluator.evaluate(predictions,{evaluator.metricName: "rmse"})
+        r_2 = evaluator.evaluate(predictions,{evaluator.metricName: "r2"})
         #Package our model parameters and metrics neatly so its easy to write
-        metrics = [rmse, r_2, average_precision, precision_at_k, ndgc]
+        metrics = [rmse, r_2]
+        
+        ##Evalaute Predictions for Ranking Tests##
+        
+        #Make predictions Binary
+        predictions = predictions.withColumn("prediction",when(predictions.rating >0,1).otherwise(0).cast("double"))
+        #Window function to partition by userId predictions in descending order
+        windowSpec_pred = Window.partitionBy('userId').orderBy(col('prediction').desc())
+        #Window function to partition reviews in the validation set by user id sort by date
+        windowSpec_label = Window.partitionBy('userId').orderBy(col('date').desc())
+
+        #Grab oldest rows for each user - no filter needed on how many this returns
+        labels = labels.select('userId', 'movieId', 'date', rank().over(windowSpec_label).alias('rank')) \
+                                    .groupBy('userId').agg(expr('collect_list(movieId) as items'))
+        
+
+        #Calculate MAP over 100 recs at the end (The value is independent of K so we just do it once)
+        labelsAndPredictions = predictions.join(labels, 'userId').rdd.map(lambda row: (row[1], row[2]))
+        rankingMetrics = RankingMetrics(labelsAndPredictions)
+        MAP = rankingMetrics.meanAveragePrecision #No function call necessary
+        metrics.append(MAP)
+
+        #Get the per user predicted Items, Iterate for different values of K
+        for k in [10,20,50,100]:
+            #Grab the K most confident predictions
+            prediction_subset = predictions.select('userId', 'movieId', 'prediction', rank().over(windowSpec_pred).alias('rank')) \
+                                        .where(f'rank <= {k}').groupBy('userId').agg(expr('collect_list(movieId) as movies'))
+
+            #Join together with the labels, the lambda makes a RDD of structure userId, movieId where movie id is a tuple in the form -> ([JavaList],[Java.List]])
+            labelsAndPredictions = prediction_subset.join(labels, 'userId').rdd.map(lambda row: (row[1], row[2]))
+            #Initialize a ranking metrics object with the joined data
+            rankingMetrics = RankingMetrics(labelsAndPredictions)
+            #Calculate and Append MAP at K, NDCG at K
+            metrics.append(rankingMetrics.meanAveragePrecisionAt(k))
+            metrics.append(rankingMetrics.ndcgAt(k))
+
+        ##ROC Metric Evaluation##
+        #For ROC Binary Classification
+        evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
+        #Append ROC to our Metrics list
+        metrics.append(evaluator.evaluate(predictions))
+
         #Convert dictionary values to list
         model_args = list(model_params.values())
         #Add the metrics to our list - in place
