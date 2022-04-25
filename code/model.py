@@ -196,8 +196,6 @@ class Model():
         
         ##Evalaute Predictions for Ranking Tests##
         
-        #Make predictions Binary
-        predictions = predictions.withColumn("prediction",when(predictions.rating >0,1).otherwise(0).cast("double"))
         #Window function to partition by userId predictions in descending order
         windowSpec_pred = Window.partitionBy('userId').orderBy(col('prediction').desc())
         #Window function to partition reviews in the validation set by user id sort by date
@@ -232,6 +230,8 @@ class Model():
 
         ##ROC Metric Evaluation##
         #For ROC Binary Classification
+        #Make predictions Binary
+        predictions = predictions.withColumn("prediction",when(predictions.rating >0,1).otherwise(0).cast("double"))
         evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
         #Append ROC to our Metrics list
         metrics.append(evaluator.evaluate(predictions))
