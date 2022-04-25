@@ -88,7 +88,7 @@ class Model():
 
         #Time predictions as well
         start = time.time()
-        #Create predictions
+        #Create predictions, matrix with additional column of prediction
         predictions = model.transform(predicted_data)
         end = time.time()
         time_elapsed_predict = end - start
@@ -133,12 +133,46 @@ class Model():
     
         output: list of n movie titles where n=num_recs... future format tbd
         """
-    
-        spark_df.createOrReplaceTempView("joined")
-        result = spark.sql(f"SELECT title, AVG(rating) as A, COUNT(userID) FROM joined GROUP BY movieID HAVING COUNT(userID)>={self.min_count} ORDER BY A DESC LIMIT {self.num_recs}")
-        out=result.select("movieID").collect()
-    
-        return(out)
+
+        #Record dummy variable (used later in writing and evaluating results) if we're evaluating Val or Test predictions
+        if val:
+            predicted_set = "Val" #Gets written out by record_metrics
+            predicted_data = val #Input gets passed to evaluator as labels
+        else:
+            predicted_set = "Test" #Gets written out by record_metrics
+            predicted_data = test #Input gets passed to evaluator as labels
+
+        #fit model to most popuar movies on training data
+        start = time.time()
+        training.createOrReplaceTempView("joined")
+        result = spark.sql(f"SELECT movieID, AVG(rating) as predicted, COUNT(userID) FROM joined GROUP BY movieID HAVING COUNT(userID)>={self.min_count} ORDER BY predicted DESC LIMIT {self.num_recs}")
+
+        #record end time after rdd operations
+        end = time.time()
+        time_elapsed_train = end - start
+
+        #Time predictions as well
+        start = time.time()
+        #Create predictions
+        predictions = predicted_data.join(result, on="movieID", how = "inner").select("predicted"))
+        end = time.time()
+        time_elapsed_predict = end - start
+
+        now = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+
+        model_params = {"Net ID": const.netID,
+                        "Time when it ran": now,
+                        "model_type":"Popularity",
+                        "predicted_set":predicted_set,
+                        "time_elapsed_train":time_elapsed_train,
+                        "time_elapsed_predict": time_elapsed_predict,
+                        "Random Seed":self.seed,
+                        "Min Review": self.min_reviews}
+
+        #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
+        self.record_metrics(predictions, labels=predicted_data,model_params=model_params)
+
+        
     
     def record_metrics(self, predictions,labels, model_params):
         """
