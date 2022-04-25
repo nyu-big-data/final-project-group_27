@@ -186,19 +186,18 @@ class Model():
         -----
         returns: None - but writes the results to results.txt in /gjd9961/scratch/big_data_final_results/results.txt
         """
-        
-        ##Evaluate Predictions for Regression Task##
-        evaluator = RegressionEvaluator(labelCol="rating", predictionCol="prediction")
-        #Calculate RMSE and r_2 metrics
-        rmse = evaluator.evaluate(predictions,{evaluator.metricName: "rmse"})
-        r_2 = evaluator.evaluate(predictions,{evaluator.metricName: "r2"})
-        #Package our model parameters and metrics neatly so its easy to write
-        metrics = [rmse, r_2]
+        metrics = []
+        if model_params['model_type'] != "baseline":
+            ##Evaluate Predictions for Regression Task##
+            evaluator = RegressionEvaluator(labelCol="rating", predictionCol="prediction")
+            #Calculate RMSE and r_2 metrics
+            rmse = evaluator.evaluate(predictions,{evaluator.metricName: "rmse"})
+            r_2 = evaluator.evaluate(predictions,{evaluator.metricName: "r2"})
+            #Package our model parameters and metrics neatly so its easy to write
+            metrics = [rmse, r_2]
         
         ##Evalaute Predictions for Ranking Tests##
         
-        #Make predictions Binary
-        predictions = predictions.withColumn("prediction",when(predictions.rating >0,1).otherwise(0).cast("double"))
         #Window function to partition by userId predictions in descending order
         windowSpec_pred = Window.partitionBy('userId').orderBy(col('prediction').desc())
         #Window function to partition reviews in the validation set by user id sort by date
@@ -233,6 +232,8 @@ class Model():
 
         ##ROC Metric Evaluation##
         #For ROC Binary Classification
+        #Make predictions Binary
+        predictions = predictions.withColumn("prediction",when(predictions.rating >0,1).otherwise(0).cast("double"))
         evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
         #Append ROC to our Metrics list
         metrics.append(evaluator.evaluate(predictions))
