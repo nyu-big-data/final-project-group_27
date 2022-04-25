@@ -12,7 +12,7 @@ def main(spark, dataset_size):
     The program will complete the code inside the main block below, and output train,val, and test sets into the Data_Partitions Folder.
     The code Will run off of the code in preprocess
     """
-    #Grab releveant file path
+    #Grab releveant file path files need to be saved like small-movies.csv
     filepath = const.HPC_DATA_FILEPATH + dataset_size + "-"
     
     #Initialize DataPreprocessor Object
