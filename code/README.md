@@ -13,6 +13,7 @@ Firstly, make sure to run `source setup.sh` in the HPC terminal. Secondly, make 
 For example:
 
 > spark-submit --conf spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true make_train_val_test_splits.py small
+
 Make sure the param dict is in single quotes.
 
 # How to execute run_model.py in the cluster
