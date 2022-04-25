@@ -1,6 +1,29 @@
-# CodeCoding Folder
+# Coding Folder
 
 This folder should be used to store various libraries of code we develop for this project. We should use an object oriented approach to keep our code tidy, efficient, and debbugable.
+
+# Getting Started:
+
+Firstly, make sure to run `source setup.sh` in the HPC terminal. Secondly, make sure you have the datasets saved in your `hdfs` filesystem. They must follow this naming convention: `<dataset_size>-<file_name>.csv`. For example: `large-movies.csv`. If they're not named this way, the scripts won't be able to find them. Similarly, if you need to access the Training/Validation/Test splits in your `hdfs` filesystem, they are named with the following convention: `<dataset_size>-<name_of_set>` For example, `small-train.csv`.
+
+# How to execute make_train_val_test_splits.py
+
+> spark-submit --conf spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true make_train_val_test_splits.py `dataset_size`
+
+For example:
+
+> spark-submit --conf spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true make_train_val_test_splits.py small
+
+Make sure the param dict is in single quotes.
+
+# How to execute run_model.py in the cluster
+
+> spark-submit --conf spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true run_model.py `dataset_size` `model_type` `param_dict`
+
+For Example:
+
+> spark-submit --conf spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true run_model.py small als '{"rank":5, "maxIter":5,"regParam":0.05}'
+Make sure the param dict is in single quotes.
 
 ## Contstants and how to Find Files / Run Scripts Properly
 
