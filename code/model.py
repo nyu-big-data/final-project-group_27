@@ -155,7 +155,7 @@ class Model():
         start = time.time()
 
         #Create predictions-cross join of predicted_data and recommended set
-        predictions = predicted_data.join(result, on="movieID", how = "cross").select("predicted"))
+        predictions = predicted_data.crossJoin(result)
         end = time.time()
         time_elapsed_predict = end - start
 
