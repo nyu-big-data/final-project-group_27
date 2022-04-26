@@ -72,3 +72,6 @@ This python script will hold a class, `DataPreprocessor` that will have the resp
 To execute run_model.py with ALS model: enter the following:
 
 > spark-submit --conf spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true run_model.py small als '{"rank":5, "maxIter":5,"regParam":0.05}'
+
+small als {"rank":5,"maxIter":10,"regParam":0.1}
+small baseline {"min_ratings":10}

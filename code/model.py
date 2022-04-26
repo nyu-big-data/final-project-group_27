@@ -19,15 +19,19 @@ class Model():
     """
     Abstract Model class that will contain various methods to deploy collaborative filtering.
     Model Parameters that need to be passed thorugh:
+    ### For ALS Model ###
     -----
     rank: int - Rank of latent factors used in decomposition
     maxIter: int - represents number of iterations to run algorithm
     regParam: float - Regularization Parameter
-    seed: int - Random seed, default set to 10 for reproducibility
-    nonnegative: boolean - Flag as to whether or not outputs can be negative or positive
     model_save: boolean - Flag to determine if we should save the model progress or not
-    num_recs: int - Top X number of reccomendations to return - default set to 100
+    -----
+    ### For baseline Model ###
+    -----
     min_ratings: int - Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
+    -----
+    ### No Input Necessary ###
+    -----
     model_size: str - Either "large" or "small" used to demarcate which dataset we are running on
     model_type: str - Which model type we intent to run, i.e. ALS or baseline
     evaluation_data_name: str - Dummy variable used to keep track of which dataset we are making predictions on, either "Val" or "Test"
@@ -36,7 +40,11 @@ class Model():
     time_to_predict: datetime - Time it took to make predictions
     metrics: dict - Dictionary used to store the various metrics calculated in self.record_metrics()
     -----
-    Model methods:
+    ### Misc ###
+    -----
+    num_recs: int - Top X number of reccomendations to return - default set to 100
+    -----
+    ### Model Methods ###
     -----
     run_model: Runs the corresponding method that was passed to self.model_type
     alternatingLeastSquares: Latent Factor model which uses the Alternating Least Squares Pyspark Class to fit and predict.
@@ -58,21 +66,20 @@ class Model():
         # Dictionary to access variable methods
         self.methods = {"als": self.alternatingLeastSquares,
                         "baseline": self.baseline}
+        self.num_recs = num_recs  # Top X number of reccomendations to return - set to 100, probably won't change
 
         # Passed through by user
+        self.model_size = model_size
+        self.model_type = model_type
+
+        # For ALS
         self.rank = rank  # Rank of latent factors used in decomposition
         self.maxIter = maxIter  # Number of iterations to run algorithm, recommended 5-20
         self.regParam = regParam  # Regularization Parameter
-        self.seed = seed  # Random seed - default set to 10 for reproducibility
-        # Flag as to whether or not outputs can be negative or positive - default False
-        self.nonnegative = nonnegative
-        self.num_recs = num_recs  # Top X number of reccomendations to return
-        # Flag used to determine whether or not we should save our model somewhere
-        self.model_save = model_save
-        # Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
-        self.min_ratings = min_ratings
-        self.model_size = model_size
-        self.model_type = model_type
+        self.model_save = model_save # Flag used to determine whether or not we should save our model somewhere
+        
+        # For baseline
+        self.min_ratings = min_ratings # Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
 
         # Add the attributes we're gonna compute when we fit and predict
         self.evaluation_data_name = None
@@ -134,7 +141,7 @@ class Model():
         start = time.time()
         # Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
         als = ALS(maxIter=self.maxIter, rank=self.rank, regParam=self.regParam,
-                  nonnegative=self.nonnegative, seed=self.seed, userCol="userId",
+                  nonnegative=False, seed=10, userCol="userId",
                   itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
 
         # Fit the model
