@@ -166,7 +166,7 @@ class Model():
 
         model_params = {"Net ID": const.netID,
                         "Time when it ran": now,
-                        "model_type":"Popularity",
+                        "model_type":"baseline",
                         "predicted_set":predicted_set,
                         "time_elapsed_train":time_elapsed_train,
                         "time_elapsed_predict": time_elapsed_predict,
