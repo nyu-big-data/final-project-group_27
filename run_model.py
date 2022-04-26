@@ -10,7 +10,6 @@ import json
 def main(spark, model_size, model_type, model_args):
 
     # Grab the filepaths for model_size
-    print(f"Getting train / test / val splits for {model_size}")
     train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
     test_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-test.csv"
     val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
@@ -22,22 +21,19 @@ def main(spark, model_size, model_type, model_args):
                           schema=const.TRAIN_VAL_TEST_SCHEMA)
     val = spark.read.csv(val_file_path, header=True,
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
-    print("Data Read Successfully")
 
-    print(f"Args being passed to model: {model_args.items()}")
     # Pass through dictionary of keyword arguments to Model()
     reccomender_system = Model(
         model_size=model_size, model_type=model_type, **model_args)
     # Run the model
     reccomender_system.run_model(train, val)
+
+    #Grab the key:value pairs of instance variables
+    instance_vars = vars(reccomender_system)
     # Write our results and model parameters
     print("Recording the model_params")
     with open(reccomender_system.results_file_path, 'a') as output_file:
-        # Write each element of metrics seperated by a comma, for the last one use a new line character
-        for i in range(len(model_args)-1):
-            output_file.write(f"{model_args[i]},")
-        output_file.write(f"{model_args[-1]}\n")
-
+        output_file.write(json.dumps(instance_vars))
 
 # Enter this block if we're in __main__
 if __name__ == '__main__':
