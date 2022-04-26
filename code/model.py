@@ -39,7 +39,7 @@ class Model():
 
     #Constructor for Model
     def __init__(self, rank=10, maxIter=5, regParam=0.01, seed=10, nonnegative=True, \
-                                            alpha=1, model_save=False, num_recs=100, min_reviews =10 ):
+                                            alpha=1, model_save=False, num_recs=100, min_reviews = 10):
         #Model Attributes                    
         self.rank = rank                                                                    #Rank of latent factors used in decomposition
         self.maxIter = maxIter                                                              #Number of iterations to run algorithm, recommended 5-20
@@ -51,7 +51,8 @@ class Model():
         self.model_save = model_save                                                        #Flag used to determine whether or not we should save our model somewhere
         self.model_save_path = const.MODEL_SAVE_FILE_PATH                                   #NO Arg needed to be passed thorugh
         self.results_file_path = const.RESULTS_SAVE_FILE_PATH                               #Filepath to write model results like rmse and model params
-        self.min_reviews = min_reviews                                                      #minimum number of reviews to qualify for baseline
+        self.min_reviews = min_reviews                                                      #Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
+
         #This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def ALS_fit_and_predict(self, training=None, val=None, test=None):
         """
@@ -146,7 +147,7 @@ class Model():
         
         #Get Top 100 Most Popular Movies
         top_100_movies = training.groupBy("movieId").agg(avg("rating").alias("avg_rating"),\
-                                        count("movieId").alias("movie_count")).where(f"movie_count>{min_review_count}").\
+                                        count("movieId").alias("movie_count")).where(f"movie_count>={self.min_reviews}").\
                                         orderBy("avg_rating",ascending=False).limit(100)
         #Grab Distinct User Ids
         ids = predicted_data.select("userId").distinct()
