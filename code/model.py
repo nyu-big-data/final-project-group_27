@@ -52,7 +52,6 @@ class Model():
         self.model_save_path = const.MODEL_SAVE_FILE_PATH                                   #NO Arg needed to be passed thorugh
         self.results_file_path = const.RESULTS_SAVE_FILE_PATH                               #Filepath to write model results like rmse and model params
         self.min_reviews = min_reviews                                                      #minimum number of reviews to qualify for baseline
-        
         #This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def ALS_fit_and_predict(self, training=None, val=None, test=None):
         """
@@ -129,7 +128,7 @@ class Model():
         """
         spark df: joined df with all user reviews
         keepNum: how many of the most popular movies we want to keep (should be 100 it seems)
-        min_count: how many reviews a movie must have in order to be considered
+        min_reviews: how many reviews a movie must have in order to be considered
     
         output: list of n movie titles where n=num_recs... future format tbd
         """
@@ -144,18 +143,21 @@ class Model():
 
         #fit model to most popuar movies on training data
         start = time.time()
-        training.createOrReplaceTempView("joined")
-        result = spark.sql(f"SELECT movieID, AVG(rating) as predicted, COUNT(userID) FROM joined GROUP BY movieID HAVING COUNT(userID)>={self.min_count} ORDER BY predicted DESC LIMIT {self.num_recs}")
-
+        
+        #Get Top 100 Most Popular Movies
+        top_100_movies = training.groupBy("movieId").agg(avg("rating").alias("avg_rating"),\
+                                        count("movieId").alias("movie_count")).where(f"movie_count>{min_review_count}").\
+                                        orderBy("avg_rating",ascending=False).limit(100)
+        #Grab Distinct User Ids
+        ids = predicted_data.select("userId").distinct()
+        #Cross Join Distinct userIds with Top 100 Most Popular Movies
+        predictions = ids.join(top_100_movies,how='cross')
         #record end time after rdd operations
         end = time.time()
         time_elapsed_train = end - start
 
         #Time predictions as well
-        start = time.time()
-
-        #Create predictions-cross join of predicted_data and recommended set
-        predictions = predicted_data.crossJoin(result)
+        start = time.time()        
         end = time.time()
         time_elapsed_predict = end - start
 
