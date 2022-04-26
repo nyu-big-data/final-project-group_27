@@ -200,10 +200,17 @@ class Model():
             metrics.append(evaluator.evaluate(predictions,{evaluator.metricName: "rmse"}))
             metrics.append(evaluator.evaluate(predictions,{evaluator.metricName: "r2"}))
 
-        #Super Janky, but I want the results to aling well enough
+            ##ROC Metric Evaluation##
+            #For ROC Binary Classification
+            #Make predictions Binary
+            binary_predicts = predictions.withColumn("prediction",when(predictions.rating >0,1).otherwise(0).cast("double"))
+            evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
+            #Append ROC to our Metrics list
+            metrics.append(evaluator.evaluate(binary_predicts))
+
+        #Super Janky, but I want the results to aling well enough - if we're doing baseline the first 3 metric values are nan
         else:
-            metrics.append(np.nan)
-            metrics.append(np.nan)
+            metrics.extend([np.nan]*3)
             
         
         ##Evalaute Predictions for Ranking Tests##
@@ -239,14 +246,6 @@ class Model():
             #Calculate and Append MAP at K, NDCG at K
             metrics.append(rankingMetrics.meanAveragePrecisionAt(k))
             metrics.append(rankingMetrics.ndcgAt(k))
-
-        ##ROC Metric Evaluation##
-        #For ROC Binary Classification
-        #Make predictions Binary
-        predictions = predictions.withColumn("prediction",when(predictions.rating >0,1).otherwise(0).cast("double"))
-        evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
-        #Append ROC to our Metrics list
-        metrics.append(evaluator.evaluate(predictions))
 
         #Convert dictionary values to list
         model_args = list(model_params.values())
