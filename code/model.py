@@ -152,7 +152,7 @@ class Model():
         #Grab Distinct User Ids
         ids = predicted_data.select("userId").distinct()
         #Cross Join Distinct userIds with Top 100 Most Popular Movies
-        predictions = ids.join(top_100_movies,how='cross')
+        predictions = ids.crossJoin(top_100_movies) 
         #record end time after rdd operations
         end = time.time()
         time_elapsed_train = end - start
@@ -199,7 +199,11 @@ class Model():
             #Calculate RMSE and r_2 metrics and append to metrics
             metrics.append(evaluator.evaluate(predictions,{evaluator.metricName: "rmse"}))
             metrics.append(evaluator.evaluate(predictions,{evaluator.metricName: "r2"}))
-            
+
+        #Super Janky, but I want the results to aling well enough
+        else:
+            metrics.append(np.nan)
+            metrics.append(np.nan)
             
         
         ##Evalaute Predictions for Ranking Tests##
