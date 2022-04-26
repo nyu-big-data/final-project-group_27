@@ -145,10 +145,10 @@ class Model():
         #fit model to most popuar movies on training data
         start = time.time()
         
-        #Get Top 100 Most Popular Movies
-        top_100_movies = training.groupBy("movieId").agg(avg("rating").alias("avg_rating"),\
+        #Get Top 100 Most Popular Movies - Avg(rating) becomes prediction
+        top_100_movies = training.groupBy("movieId").agg(avg("rating").alias("prediction"),\
                                         count("movieId").alias("movie_count")).where(f"movie_count>={self.min_reviews}").\
-                                        orderBy("avg_rating",ascending=False).limit(100)
+                                        orderBy("prediction",ascending=False).limit(100)
         #Grab Distinct User Ids
         ids = predicted_data.select("userId").distinct()
         #Cross Join Distinct userIds with Top 100 Most Popular Movies
