@@ -35,7 +35,7 @@ def main(spark, model_size,model_type,model_args):
 
     #If baseline... you guessed it, use baseline
     elif model_type == 'baseline':
-        userRecs, movieRecs = reccomender_system.baseline(train,val,test)
+        movieRecs = reccomender_system.baseline(train,val,test)
 
 
 if __name__ == '__main__':
