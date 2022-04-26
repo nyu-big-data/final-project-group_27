@@ -189,15 +189,18 @@ class Model():
         -----
         returns: None - but writes the results to results.txt in /gjd9961/scratch/big_data_final_results/results.txt
         """
+
+        #Initialize list to hold metrics
         metrics = []
+
         if model_params['model_type'] != "baseline":
             ##Evaluate Predictions for Regression Task##
             evaluator = RegressionEvaluator(labelCol="rating", predictionCol="prediction")
-            #Calculate RMSE and r_2 metrics
-            rmse = evaluator.evaluate(predictions,{evaluator.metricName: "rmse"})
-            r_2 = evaluator.evaluate(predictions,{evaluator.metricName: "r2"})
-            #Package our model parameters and metrics neatly so its easy to write
-            metrics = [rmse, r_2]
+            #Calculate RMSE and r_2 metrics and append to metrics
+            metrics.append(evaluator.evaluate(predictions,{evaluator.metricName: "rmse"}))
+            metrics.append(evaluator.evaluate(predictions,{evaluator.metricName: "r2"}))
+            
+            
         
         ##Evalaute Predictions for Ranking Tests##
         
