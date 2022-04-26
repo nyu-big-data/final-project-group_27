@@ -88,7 +88,7 @@ class Model():
         self.time_to_predict = None
         self.metrics = {}
 
-    def run_model(self, train, val, test):
+    def run_model(self, train, val=None, test=None):
         """
         Run_model is what is called to fit, run, and record the metrics for respective model types.
         Function behavior is dependent on the argument passed to self.model_type.
