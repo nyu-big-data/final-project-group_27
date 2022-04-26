@@ -238,6 +238,10 @@ class Model():
                 rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
             # Append ROC to our Metrics list
             self.metrics["ROC"] = evaluator.evaluate(binary_predicts)
+        else:
+             self.metrics["rmse"] = np.nan
+             self.metrics["r2"] = np.nan
+             self.metrics["ROC"] = np.nan
 
         ##Evalaute Predictions for Ranking Tests##
 
