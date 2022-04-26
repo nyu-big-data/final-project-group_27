@@ -168,7 +168,7 @@ class Model():
         #Package Parameters into a dictionary to ease recording
         model_params = {"Net ID": const.netID,
                         "Time when it ran": now,
-                        "model_type":"ALS",
+                        "model_type":"baseline",
                         "predicted_set":predicted_set,
                         "time_elapsed_train":time_elapsed_train,
                         "time_elapsed_predict": time_elapsed_predict,
