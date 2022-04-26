@@ -182,7 +182,7 @@ class Model():
         #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
         self.record_metrics(predictions, labels=predicted_data,model_params=model_params)
 
-        
+        return top_100_movies
     
     def record_metrics(self, predictions,labels, model_params):
         """
