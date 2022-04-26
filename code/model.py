@@ -107,7 +107,8 @@ class Model():
                         "maxIter":self.maxIter,
                         "regParam":self.regParam,
                         "NonNegative":self.nonnegative,
-                        "Random Seed":self.seed}
+                        "Random Seed":self.seed,
+                        "minimum_review":self.min_reviews}
 
         #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
         self.record_metrics(predictions, labels=predicted_data,model_params=model_params)
@@ -164,14 +165,19 @@ class Model():
 
         now = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
 
+        #Package Parameters into a dictionary to ease recording
         model_params = {"Net ID": const.netID,
                         "Time when it ran": now,
-                        "model_type":"baseline",
+                        "model_type":"ALS",
                         "predicted_set":predicted_set,
                         "time_elapsed_train":time_elapsed_train,
                         "time_elapsed_predict": time_elapsed_predict,
+                        "Rank":self.rank,
+                        "maxIter":self.maxIter,
+                        "regParam":self.regParam,
+                        "NonNegative":self.nonnegative,
                         "Random Seed":self.seed,
-                        "Min Review": self.min_reviews}
+                        "Min Review":self.min_reviews}
 
         #Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
         self.record_metrics(predictions, labels=predicted_data,model_params=model_params)
