@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from code.model import Model
+from code.test_model import Model
 import code.constants as const
 import sys
 import json
@@ -22,8 +22,10 @@ def main(spark, model_size):
     val = spark.read.csv(val_file_path, header=True,
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
 
-    train.filter("userid=53").show()
-    print(f"Train Count: {train.count()}, Test Count {test.count()}, Val Count: {val.count()}")
+    m = Model(model_type='baseline',min_ratings=0)
+    df = m.baseline(train,val)
+    df.show()
+    
 
 # Enter this block if we're in __main__
 if __name__ == '__main__':
