@@ -46,10 +46,9 @@ if __name__ == '__main__':
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
     k = int(sys.argv[2])
-    print(k)
     
-    # # Make sure input is valid
-    # if model_size not in ['small', 'large']:
-    #     raise Exception(f"Model Size must either be 'small' or 'large', you entered {model_size}")
-    # #Call Main
-    # main(spark, model_size, k)
+    # Make sure input is valid
+    if model_size not in ['small', 'large']:
+        raise Exception(f"Model Size must either be 'small' or 'large', you entered {model_size}")
+    #Call Main
+    main(spark, model_size, k)
