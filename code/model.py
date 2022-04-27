@@ -55,8 +55,8 @@ class Model():
     """
 
     # Constructor for Model
-    def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None, seed=10, nonnegative=True,
-                 model_save=False, num_recs=100, min_ratings=None):
+    def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
+                 model_save=False, num_recs=100, min_ratings=None, positive_rating_threshold = 0):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         self.netID = const.netID
@@ -66,26 +66,31 @@ class Model():
         # Dictionary to access variable methods
         self.methods = {"als": self.alternatingLeastSquares,
                         "baseline": self.baseline}
-        self.num_recs = num_recs  # Top X number of reccomendations to return - set to 100, probably won't change
+        # Top X number of reccomendations to return - set to 100, probably won't change
+        self.num_recs = num_recs
 
         # Passed through by user
         self.model_size = model_size
         self.model_type = model_type
+        self.positive_rating_threshold = positive_rating_threshold
 
         # For ALS
         self.rank = rank  # Rank of latent factors used in decomposition
         self.maxIter = maxIter  # Number of iterations to run algorithm, recommended 5-20
         self.regParam = regParam  # Regularization Parameter
-        self.model_save = model_save # Flag used to determine whether or not we should save our model somewhere
-        
+        # (Optional) Flag used to determine whether or not we should save our model somewhere
+        self.model_save = model_save
+
         # For baseline
-        self.min_ratings = min_ratings # Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
+        # Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
+        self.min_ratings = min_ratings
 
         # Add the attributes we're gonna compute when we fit and predict
         self.evaluation_data_name = None
         self.time_when_ran = None
         self.time_to_fit = None
         self.time_to_predict = None
+        self.ranking_metrics_data = None
         self.metrics = {}
 
     def run_model(self, train, val=None, test=None):
@@ -152,25 +157,26 @@ class Model():
 
         # Time predictions as well
         start = time.time()
-        # Create predictions, matrix with additional column of prediction
-        predictions = model.transform(evaluation_data)
+        regression_predictions = model.transform(evaluation_data)
+        #Generate 100 Top Movies for All Users
+        userRecs = model.recommendForAllUsers(self.num_recs)
+        #Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
+        ranking_predictions = userRecs.select("userId",explode("recommendations.movieId"))
         end = time.time()
         self.time_to_predict = end - start
 
-        # Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
-        self.record_metrics(predictions=predictions, labels=evaluation_data)
-
-        # Generate top 10 movie recommendations for each user
-        userRecs = model.recommendForAllUsers(self.num_recs)
-        # Generate top 10 user recommendations for each movie
-        movieRecs = model.recommendForAllItems(self.num_recs)
+        # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
+        self.ranking_metrics(predictions=ranking_predictions, labels=evaluation_data)
+        #Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
+        self.non_ranking_metrics(regression_predictions)        
+        
 
         # Save model if we need to
         if self.model_save:
             self.save_model(model_type=self.model_type, model=als)
 
-        # Return top self.num_recs movie recs for each user, top self.num_recs user recs for each movie
-        return [userRecs, movieRecs]
+        # Return top self.num_recs movie recs for each user
+        return userRecs
 
     # Baseline model that returns top X most popular items (highest avg rating)
     def baseline(self, training, evaluation_data):
@@ -185,6 +191,10 @@ class Model():
         -----
         output: RDD of Top 100 movieIds by avg(rating)
         """
+        #Make sure the right params have been passed to Model()
+        if self.min_ratings is None:
+            raise Exception("Must pass through a value for self.min_ratings for baselien to compute")
+
         # Time model Fit
         start = time.time()
         # Get Top 100 Most Popular Movies - Avg(rating) becomes prediction
@@ -203,12 +213,27 @@ class Model():
         self.time_to_predict = 0  # Recommends in constant time
 
         # Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
-        self.record_metrics(predictions=predictions, labels=evaluation_data)
+        self.ranking_metrics(predictions=predictions, labels=evaluation_data)
 
         # Return The top 100 most popular movies above self.min_ratings threshold
         return top_100_movies
 
-    def record_metrics(self, predictions, labels):
+    #Non-Ranking Metrics Calculated Here
+    def non_ranking_metrics(self,predictions):
+        ##Evaluate Predictions for Regression Task##
+        evaluator = RegressionEvaluator(labelCol="rating", predictionCol="prediction")
+        # Calculate RMSE and r_2 metrics and append to metrics
+        self.metrics["rmse"] = evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
+        self.metrics["r2"] = evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
+
+        ##ROC Metric Evaluation##
+        # Make predictions Binary
+        binary_predicts = predictions.withColumn("prediction", when(predictions.rating > 0, 1).otherwise(0).cast("double"))
+        evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
+        # Append ROC to our Metrics list
+        self.metrics["ROC"] = evaluator.evaluate(binary_predicts)
+
+    def ranking_metrics(self, predictions, labels):
         """
         Method that will contain all the code to evaluate model on metrics: RMSE, R^2, ROC, Precistion At K, Mean Precision, and NDGC
         input:
@@ -219,68 +244,27 @@ class Model():
         returns: 
         None - Writes the results to self.metrics dictionary
         """
-        if self.model_type != 'baseline':
-            ##Evaluate Predictions for Regression Task##
-            evaluator = RegressionEvaluator(
-                labelCol="rating", predictionCol="prediction")
-            # Calculate RMSE and r_2 metrics and append to metrics
-            self.metrics["rmse"] = evaluator.evaluate(
-                predictions, {evaluator.metricName: "rmse"})
-            self.metrics["r2"] = evaluator.evaluate(
-                predictions, {evaluator.metricName: "r2"})
+        #This will allow for faster iterations of self.positive_rating_threshold 
+        if self.ranking_metrics_data is None:
+            #Join labels and predictions on [userId,movieId]
+            label_inner_predictions = labels.join(predictions, ['userId', 'movieId'], how ='inner').select('userId', 'movieId', "rating")
 
-            ##ROC Metric Evaluation##
-            # For ROC Binary Classification
-            # Make predictions Binary
-            binary_predicts = predictions.withColumn("prediction", when(
-                predictions.rating > 0, 1).otherwise(0).cast("double"))
-            evaluator = BinaryClassificationEvaluator(
-                rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
-            # Append ROC to our Metrics list
-            self.metrics["ROC"] = evaluator.evaluate(binary_predicts)
-        else:
-             self.metrics["rmse"] = np.nan
-             self.metrics["r2"] = np.nan
-             self.metrics["ROC"] = np.nan
+            #Collect ratings by userId where the rating is above some self.review_score_threshold -> userId, [movie1,...movieN]
+            pos_label_inner_prediction = label_inner_predictions.where(f"rating>{self.positive_rating_threshold}"\
+                                                ).groupBy('userId').agg(expr('collect_list(movieId) as movieId'))
+            label_inner_predictions = label_inner_predictions.groupBy('userId').agg(expr('collect_list(movieId) as movieId'))
+            
+            ranking_metrics_data = label_inner_predictions.join(
+                    pos_label_inner_prediction, 'userId').rdd.map(lambda row: (row[1], row[2]))
+            
+            #Update self.ranking_metrics_data
+            self.ranking_metrics_data = ranking_metrics_data
 
-        ##Evalaute Predictions for Ranking Tests##
-
-        # Window function to partition by userId predictions in descending order
-        windowSpec_pred = Window.partitionBy(
-            'userId').orderBy(col('prediction').desc())
-        # Window function to partition reviews in the validation set by user id sort by date
-        windowSpec_label = Window.partitionBy(
-            'userId').orderBy(col('date').desc())
-
-        # Grab oldest watched movies for each user - Ouput RDD with cols userId, movieId where movieId is a list of watched movie ids -> [movieId,...]
-        labels = labels.select('userId', 'movieId', 'date', rank().over(windowSpec_label).alias('rank')) \
-            .groupBy('userId').agg(expr('collect_list(movieId) as items'))
-        # Order predictions by high confidence to low - Ouput RDD with cols userId, movieId where movieId is a list of reccomended movie ids -> [movieId,...]
-        prediction_subset = predictions.select('userId', 'movieId', 'prediction', rank().over(windowSpec_pred).alias('rank')) \
-            .groupBy('userId').agg(expr('collect_list(movieId) as movies'))
-
-        # Calculate MAP over 100 recs at the end (The value is independent of K so we just do it once)
-        labelsAndPredictions = prediction_subset.join(
-            labels, 'userId').rdd.map(lambda row: (row[1], row[2]))
-        rankingMetrics = RankingMetrics(labelsAndPredictions)
-        # No function call necessary
-        self.metrics["MAP"] = rankingMetrics.meanAveragePrecision
-
-        # Get the per user predicted Items, Iterate for different values of K
-        for k in [10, 20, 50, 100]:
-            # Grab the K most confident predictions
-            prediction_subset = predictions.select('userId', 'movieId', 'prediction', rank().over(windowSpec_pred).alias('rank')) \
-                .where(f'rank <= {k}').groupBy('userId').agg(expr('collect_list(movieId) as movies'))
-
-            # Join together with the labels, the lambda makes a RDD of structure userId, movieId where movie id is a tuple in the form -> ([JavaList],[Java.List]])
-            labelsAndPredictions = prediction_subset.join(
-                labels, 'userId').rdd.map(lambda row: (row[1], row[2]))
-            # Initialize a ranking metrics object with the joined data
-            rankingMetrics = RankingMetrics(labelsAndPredictions)
-            # Calculate and Append MAP at K, NDCG at K
-            self.metrics[f"meanAveragePrecisionAt{k}"] = rankingMetrics.meanAveragePrecisionAt(
-                k)
-            self.metrics[f"ndcgAt{k}"] = rankingMetrics.ndcgAt(k)
+        #Get RankingMetrics object
+        metrics = RankingMetrics(ranking_metrics_data)
+        #Calculate MAP
+        self.metrics['Precision - Intersection'] = metrics.recallAt(self.num_recs)
+        self.metrics['MAP - Intersection'] = metrics.meanAveragePrecision
 
     # Method to save model to const.MODEL_SAVE_FILE_PATH
     def save_model(self, model_type=None, model=None):

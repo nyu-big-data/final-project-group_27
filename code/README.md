@@ -75,3 +75,4 @@ To execute run_model.py with ALS model: enter the following:
 
 small als {"rank":5,"maxIter":10,"regParam":0.1}
 small baseline {"min_ratings":10}
+Optional parameter -> positive_rating_threshold used in custom ranking metrics
