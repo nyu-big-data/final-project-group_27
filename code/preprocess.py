@@ -184,9 +184,9 @@ class DataPreprocessor():
         test = holdout_df.filter(~holdout_df.userId.isin(val_users))
 
         #Repartition for efficiency
-        training = training.repartition(10)
-        val = val.repartition(10)
-        test = test.repartition(10)
+        training = training.coalesce(1)
+        val = val.coalesce(1)
+        test = test.coalesce(1)
         #Return train/val/test splits
         return training, val, test
 
