@@ -241,21 +241,19 @@ class Model():
         returns: 
         None - Writes the results to self.metrics dictionary
         """
-        #This will allow for faster iterations of self.positive_rating_threshold 
-        if self.ranking_metrics_data is None:
-            #Join labels and predictions on [userId,movieId]
-            label_inner_predictions = labels.join(predictions, ['userId', 'movieId'], how ='inner').select('userId', 'movieId', "rating")
+        
+        #Join labels and predictions on [userId,movieId]
+        label_inner_predictions = labels.join(predictions, ['userId', 'movieId'], how ='inner').select('userId', 'movieId', "rating")
 
-            #Collect ratings by userId where the rating is above some self.review_score_threshold -> userId, [movie1,...movieN]
-            pos_label_inner_prediction = label_inner_predictions.where(f"rating>{self.positive_rating_threshold}"\
-                                                ).groupBy('userId').agg(expr('collect_list(movieId) as movieId'))
-            label_inner_predictions = label_inner_predictions.groupBy('userId').agg(expr('collect_list(movieId) as movieId'))
-            
-            ranking_metrics_data = label_inner_predictions.join(
-                    pos_label_inner_prediction, 'userId').rdd.map(lambda row: (row[1], row[2]))
-            
-            #Update self.ranking_metrics_data
-            self.ranking_metrics_data = ranking_metrics_data
+        #Collect ratings by userId where the rating is above some self.review_score_threshold -> userId, [movie1,...movieN]
+        pos_label_inner_prediction = label_inner_predictions.where(f"rating>{self.positive_rating_threshold}"\
+                                            ).groupBy('userId').agg(expr('collect_list(movieId) as movieId'))
+        label_inner_predictions = label_inner_predictions.groupBy('userId').agg(expr('collect_list(movieId) as movieId'))
+        
+        ranking_metrics_data = label_inner_predictions.join(
+                pos_label_inner_prediction, 'userId').rdd.map(lambda row: (row[1], row[2]))
+        
+        #Update self.ranking_metrics_data
 
         #Get RankingMetrics object
         metrics = RankingMetrics(ranking_metrics_data)
