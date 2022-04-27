@@ -43,7 +43,7 @@ if __name__ == '__main__':
     Script used to tune hyper parameters for some model
     """
     # Initialize spark context
-    spark = SparkSession.builder.appName('Hyper-Parameter-Tuning-Baseline').getOrCreate()
+    spark = SparkSession.builder.appName('proj').getOrCreate()
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
     k = int(sys.argv[2])

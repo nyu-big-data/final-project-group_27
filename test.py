@@ -35,7 +35,7 @@ if __name__ == '__main__':
     i.e. '{"rank":10, "maxIter":10,"regParam":0.05}'
     """
     # Initialize spark context
-    spark = SparkSession.builder.appName('Run_Model').getOrCreate()
+    spark = SparkSession.builder.appName('Proj').getOrCreate()
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
     # Define the model type in second argument:

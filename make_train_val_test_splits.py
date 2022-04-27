@@ -28,6 +28,7 @@ def main(spark, dataset_size):
     val.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}-val.csv")
     test.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}-test.csv")
 
+    #test.write.format("csv").mode("overwrite").options(header="true",sep="'").save(path=self.output_file_path)
 
     #Let us know when done
     print("Finished Saving")
@@ -35,7 +36,7 @@ def main(spark, dataset_size):
 # Only enter this block if we're in main
 if __name__ == "__main__":
     #Initalize spark session
-    spark = SparkSession.builder.appName('Make_Train_Val_Test_Splits_Session').getOrCreate()
+    spark = SparkSession.builder.appName('Proj').getOrCreate()
     #Either 'small' or 'large' should be passed through -> sys.argv[1]
     dataset_size = sys.argv[1]
     if dataset_size not in ['small','large']:

@@ -31,8 +31,8 @@ def main(spark, model_size, model_type, model_args):
     instance_vars = vars(reccomender_system)
     #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
     del instance_vars["methods"]
-    del instance_vars["ranking_metrics_data"]
 
+    print(instance_vars)
     # Write our results and model parameters
     print("Recording the model_params")
     with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     i.e. '{"rank":10, "maxIter":10,"regParam":0.05}'
     """
     # Initialize spark context
-    spark = SparkSession.builder.appName('Run_Model').getOrCreate()
+    spark = SparkSession.builder.appName('Proj').getOrCreate()
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
     # Define the model type in second argument:
