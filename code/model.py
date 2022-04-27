@@ -209,8 +209,11 @@ class Model():
         self.time_to_predict = 0  # Recommends in constant time
 
         # Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
-        self.ranking_metrics(predictions=predictions, labels=evaluation_data)
+        precision, MAP = self.ranking_metrics(predictions=predictions, labels=evaluation_data)
 
+        self.metrics['precision'] = precision
+        self.metrics['MAP'] = MAP
+        
         # Return The top 100 most popular movies above self.min_ratings threshold
         return top_100_movies
 
@@ -256,9 +259,13 @@ class Model():
         #Get RankingMetrics object
         metrics = RankingMetrics(ranking_metrics_data)
         #Calculate MAP
-        self.metrics['Precision - Intersection'] = metrics.recallAt(self.num_recs)
-        self.metrics['MAP - Intersection'] = metrics.meanAveragePrecision
+        # self.metrics['Precision - Intersection'] = metrics.recallAt(self.num_recs)
+        # self.metrics['MAP - Intersection'] = metrics.meanAveragePrecision
+        precision = metrics.recallAt(self.num_recs)
+        MAP = metrics.meanAveragePrecision
+        print(f'precision {precision} MAP {MAP}')
 
+        return precision,MAP
     # Method to save model to const.MODEL_SAVE_FILE_PATH
     def save_model(self, model_type=None, model=None):
         """

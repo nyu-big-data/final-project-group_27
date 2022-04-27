@@ -251,7 +251,6 @@ class Model():
         
         ranking_metrics_data = label_inner_predictions.join(
                 pos_label_inner_prediction, 'userId').rdd.map(lambda row: (row[1], row[2]))
-        return ranking_metrics_data.filter('userId = 53')
 
         #Get RankingMetrics object
         metrics = RankingMetrics(ranking_metrics_data)
