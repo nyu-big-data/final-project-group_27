@@ -26,7 +26,7 @@ def main(spark, model_size, model_type, model_args):
     reccomender_system = Model(
         model_size=model_size, model_type=model_type, **model_args)
     # Run the model
-    reccomender_system.run_model(train, val)
+    reccomender_system.run_model(train=train, val=val)
 
     #Grab the key:value pairs of instance variables
     instance_vars = vars(reccomender_system)
