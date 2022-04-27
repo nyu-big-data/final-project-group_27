@@ -7,7 +7,7 @@ import json
 # Main Function that will define model behavior
 
 
-def main(spark, model_size, model_type, model_args):
+def main(spark, model_size):
 
     # Grab the filepaths for model_size
     train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
@@ -38,16 +38,5 @@ if __name__ == '__main__':
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
     # Define the model type in second argument:
-    model_type = sys.argv[2]
-    # Model Args:
-    model_args = json.loads(sys.argv[3])
 
-    # Make sure input is valid
-    if model_size not in ['small', 'large']:
-        raise Exception(
-            f"Model Size must either be 'small' or 'large', you entered {model_size}")
-    if model_type not in ['als', 'baseline']:
-        raise Exception(
-            f"Model Type must be either 'als' or 'baseline', you entered {model_type}")
-    #Call Main
-    main(spark, model_size, model_type, model_args)
+    main(spark, model_size)
