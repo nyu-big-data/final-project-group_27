@@ -24,8 +24,7 @@ def main(spark, model_size):
     #                      schema=const.TRAIN_VAL_TEST_SCHEMA)
 
     m = Model(model_type='baseline',min_ratings=0)
-    df = m.baseline(train,val)
-    df.show()
+    df = m.run_model(train,val)
     print(vars(m))
     
 
