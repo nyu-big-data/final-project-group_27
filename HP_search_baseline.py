@@ -35,6 +35,7 @@ def main(spark, model_size, k):
         print("Recording the model_params")
         with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
             output_file.write(json.dumps(instance_vars))
+            output_file.write("\n")
 
 # Enter this block if we're in __main__
 if __name__ == '__main__':
@@ -46,7 +47,7 @@ if __name__ == '__main__':
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
     k = int(sys.argv[2])
-    
+
     # Make sure input is valid
     if model_size not in ['small', 'large']:
         raise Exception(f"Model Size must either be 'small' or 'large', you entered {model_size}")
