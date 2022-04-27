@@ -87,7 +87,6 @@ class Model():
         self.time_when_ran = None
         self.time_to_fit = None
         self.time_to_predict = None
-        self.ranking_metrics_data = None
         self.metrics = {}
 
     def run_model(self, train, val=None, test=None):
@@ -253,7 +252,6 @@ class Model():
         ranking_metrics_data = label_inner_predictions.join(
                 pos_label_inner_prediction, 'userId').rdd.map(lambda row: (row[1], row[2]))
         
-        #Update self.ranking_metrics_data
 
         #Get RankingMetrics object
         metrics = RankingMetrics(ranking_metrics_data)
