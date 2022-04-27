@@ -56,7 +56,7 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 model_save=False, num_recs=100, min_ratings=None, positive_rating_threshold = 0):
+                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold = 0):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         self.netID = const.netID
