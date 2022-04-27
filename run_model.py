@@ -23,8 +23,7 @@ def main(spark, model_size, model_type, model_args):
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
 
     # Pass through dictionary of keyword arguments to Model()
-    reccomender_system = Model(
-        model_size=model_size, model_type=model_type, **model_args)
+    reccomender_system = Model(model_size=model_size, model_type=model_type, **model_args)
     # Run the model
     reccomender_system.run_model(train=train, val=val)
 
@@ -38,6 +37,7 @@ def main(spark, model_size, model_type, model_args):
     print("Recording the model_params")
     with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
         output_file.write(json.dumps(instance_vars))
+        output_file.write("\n")
 
 # Enter this block if we're in __main__
 if __name__ == '__main__':
