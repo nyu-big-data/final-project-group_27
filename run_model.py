@@ -32,6 +32,8 @@ def main(spark, model_size, model_type, model_args):
     instance_vars = vars(reccomender_system)
     #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
     del instance_vars["methods"]
+    del instance_vars["ranking_metrics_data"]
+    
     # Write our results and model parameters
     print("Recording the model_params")
     with open(reccomender_system.results_file_path, 'a') as output_file:
