@@ -213,7 +213,7 @@ class Model():
 
         self.metrics['precision'] = precision
         self.metrics['MAP'] = MAP
-        
+        print(precision,MAP)
         # Return The top 100 most popular movies above self.min_ratings threshold
         return top_100_movies
 
