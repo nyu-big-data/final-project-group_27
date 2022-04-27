@@ -213,7 +213,7 @@ class Model():
 
         self.metrics['precision'] = precision
         self.metrics['MAP'] = MAP
-        print(precision,MAP)
+
         # Return The top 100 most popular movies above self.min_ratings threshold
         return top_100_movies
 
@@ -255,6 +255,7 @@ class Model():
         ranking_metrics_data = label_inner_predictions.join(
                 pos_label_inner_prediction, 'userId').rdd.map(lambda row: (row[1], row[2]))
         
+        ranking_metrics_data = ranking_metrics_data.coalesce(1)
 
         #Get RankingMetrics object
         metrics = RankingMetrics(ranking_metrics_data)
@@ -263,7 +264,6 @@ class Model():
         # self.metrics['MAP - Intersection'] = metrics.meanAveragePrecision
         precision = metrics.recallAt(self.num_recs)
         MAP = metrics.meanAveragePrecision
-        print(f'precision {precision} MAP {MAP}')
 
         return precision,MAP
     # Method to save model to const.MODEL_SAVE_FILE_PATH
