@@ -117,8 +117,10 @@ class Model():
             evaluation_data = test
 
         # Grab method for whichever model corresponds to self.model_type
+        print("selecting model")
         model = self.methods[self.model_type]
         # Run model on training / evaluation data
+        print("getting model output")
         model_output = model(train, evaluation_data)
         # Return model output
         return model_output
@@ -161,6 +163,7 @@ class Model():
         end = time.time()
         self.time_to_predict = end - start
 
+        print("Calculating Ranking Metrics")
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
         self.ranking_metrics(predictions=ranking_predictions, labels=evaluation_data)
         #Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
@@ -213,7 +216,7 @@ class Model():
 
         self.metrics['precision'] = precision
         self.metrics['MAP'] = MAP
-
+        print(self.metrics['precision'],self.metrics['MAP'])
         # Return The top 100 most popular movies above self.min_ratings threshold
         return top_100_movies
 
@@ -244,6 +247,7 @@ class Model():
         None - Writes the results to self.metrics dictionary
         """
         
+        print("Starting Ranking Metrics")
         #Join labels and predictions on [userId,movieId]
         label_inner_predictions = labels.join(predictions, ['userId', 'movieId'], how ='inner').select('userId', 'movieId', "rating")
 
@@ -257,6 +261,7 @@ class Model():
         
         ranking_metrics_data = ranking_metrics_data.coalesce(1)
 
+        print(f"Ranking_Metrics_data Partitions:{ranking_metrics_data.getNumPartitions()}")
         #Get RankingMetrics object
         metrics = RankingMetrics(ranking_metrics_data)
         #Calculate MAP
@@ -264,7 +269,7 @@ class Model():
         # self.metrics['MAP - Intersection'] = metrics.meanAveragePrecision
         precision = metrics.recallAt(self.num_recs)
         MAP = metrics.meanAveragePrecision
-
+        print(f"Computed precision: {precision}, and MAP: {MAP}")
         return precision,MAP
     # Method to save model to const.MODEL_SAVE_FILE_PATH
     def save_model(self, model_type=None, model=None):
