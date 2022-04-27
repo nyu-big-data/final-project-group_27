@@ -14,7 +14,7 @@ def main(spark, model_size):
     # test_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-test.csv"
     # val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
 
-    train, val, test = DataPreprocessor(spark,const.HPC_DATA_FILEPATH).preprocess(sanity_checker=True)
+    train, val, test = DataPreprocessor(spark,const.HPC_DATA_FILEPATH+"small-").preprocess(sanity_checker=True)
     # Read data for file paths
     # train = spark.read.csv(train_file_path, header=True,
     #                        schema=const.TRAIN_VAL_TEST_SCHEMA)
