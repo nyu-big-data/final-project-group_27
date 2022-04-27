@@ -1,30 +1,32 @@
 from pyspark.sql import SparkSession
-from code.test_model import Model
+from code.model import Model
 import code.constants as const
 import sys
 import json
-
+from code.preprocess import DataPreprocessor
 # Main Function that will define model behavior
 
 
 def main(spark, model_size):
 
-    # Grab the filepaths for model_size
-    train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
-    test_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-test.csv"
-    val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
+    # # Grab the filepaths for model_size
+    # train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
+    # test_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-test.csv"
+    # val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
 
+    train, val, test = DataPreprocessor(spark,const.HPC_DATA_FILEPATH).preprocess(sanity_checker=True)
     # Read data for file paths
-    train = spark.read.csv(train_file_path, header=True,
-                           schema=const.TRAIN_VAL_TEST_SCHEMA)
-    test = spark.read.csv(test_file_path, header=True,
-                          schema=const.TRAIN_VAL_TEST_SCHEMA)
-    val = spark.read.csv(val_file_path, header=True,
-                         schema=const.TRAIN_VAL_TEST_SCHEMA)
+    # train = spark.read.csv(train_file_path, header=True,
+    #                        schema=const.TRAIN_VAL_TEST_SCHEMA)
+    # test = spark.read.csv(test_file_path, header=True,
+    #                       schema=const.TRAIN_VAL_TEST_SCHEMA)
+    # val = spark.read.csv(val_file_path, header=True,
+    #                      schema=const.TRAIN_VAL_TEST_SCHEMA)
 
     m = Model(model_type='baseline',min_ratings=0)
     df = m.baseline(train,val)
     df.show()
+    print(vars(m))
     
 
 # Enter this block if we're in __main__
