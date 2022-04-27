@@ -60,9 +60,6 @@ class Model():
         # Model Attributes
         # NO Arg needed to be passed thorugh
         self.netID = const.netID
-        self.model_save_path = const.MODEL_SAVE_FILE_PATH
-        # Filepath to write model results like rmse and model params
-        self.results_file_path = const.RESULTS_SAVE_FILE_PATH
         # Dictionary to access variable methods
         self.methods = {"als": self.alternatingLeastSquares,
                         "baseline": self.baseline}

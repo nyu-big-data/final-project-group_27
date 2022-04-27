@@ -33,10 +33,10 @@ def main(spark, model_size, model_type, model_args):
     #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
     del instance_vars["methods"]
     del instance_vars["ranking_metrics_data"]
-    
+
     # Write our results and model parameters
     print("Recording the model_params")
-    with open(reccomender_system.results_file_path, 'a') as output_file:
+    with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
         output_file.write(json.dumps(instance_vars))
 
 # Enter this block if we're in __main__
