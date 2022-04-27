@@ -15,31 +15,29 @@ def main(spark, model_size, model_type, model_args):
     val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
 
     # Read data for file paths
-    train = spark.read.csv(train_file_path, header=True,
+    train = spark.read.csv(train_file_path,
                            schema=const.TRAIN_VAL_TEST_SCHEMA)
-    test = spark.read.csv(test_file_path, header=True,
+    test = spark.read.csv(test_file_path,
                           schema=const.TRAIN_VAL_TEST_SCHEMA)
-    val = spark.read.csv(val_file_path, header=True,
+    val = spark.read.csv(val_file_path,
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
 
-    train.groupBy("userId").count().show()
+    # Pass through dictionary of keyword arguments to Model()
+    reccomender_system = Model(
+        model_size=model_size, model_type=model_type, **model_args)
+    # Run the model
+    reccomender_system.run_model(train=train, val=val)
 
-    # # Pass through dictionary of keyword arguments to Model()
-    # reccomender_system = Model(
-    #     model_size=model_size, model_type=model_type, **model_args)
-    # # Run the model
-    # reccomender_system.run_model(train=train, val=val)
+    #Grab the key:value pairs of instance variables
+    instance_vars = vars(reccomender_system)
+    #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
+    del instance_vars["methods"]
+    del instance_vars["ranking_metrics_data"]
 
-    # #Grab the key:value pairs of instance variables
-    # instance_vars = vars(reccomender_system)
-    # #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
-    # del instance_vars["methods"]
-    # del instance_vars["ranking_metrics_data"]
-
-    # # Write our results and model parameters
-    # print("Recording the model_params")
-    # with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
-    #     output_file.write(json.dumps(instance_vars))
+    # Write our results and model parameters
+    print("Recording the model_params")
+    with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
+        output_file.write(json.dumps(instance_vars))
 
 # Enter this block if we're in __main__
 if __name__ == '__main__':
