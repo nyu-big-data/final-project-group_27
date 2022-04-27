@@ -45,7 +45,7 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('Hyper-Parameter-Tuning-Baseline').getOrCreate()
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
-    k = sys.argv[2]
+    k = int(sys.argv[2])
     # Make sure input is valid
     if model_size not in ['small', 'large']:
         raise Exception(f"Model Size must either be 'small' or 'large', you entered {model_size}")
