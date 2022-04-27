@@ -22,7 +22,7 @@ def main(spark, model_size):
     val = spark.read.csv(val_file_path, header=True,
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
 
-    train.show()
+    train.filter("userid=27").show()
     test.show()
     val.show()
     print(f"Train Count: {train.count()}, Test Count {test.count()}, Val Count: {val.count()}")
