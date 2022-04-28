@@ -25,9 +25,9 @@ def main(spark, model_size):
 
     m = Model(model_type='baseline',min_ratings=0)
     df = m.run_model(train,val)
-    df.write.csv("Debugging_agg.csv")
+    df.write.csv("Debugging_test.csv")
     df = df.toPandas()
-    df.to_csv(const.MODEL_SAVE_FILE_PATH)
+    df.to_csv(f"{const.MODEL_SAVE_FILE_PATH}debugging_df.csv")
     print(vars(m))
     
 
