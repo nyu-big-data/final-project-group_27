@@ -27,7 +27,7 @@ def main(spark, model_size):
     df = m.run_model(train,val)
     print("saving model via pandas")
     df2 = df.toPandas()
-    df2.to_csv(f"{const.MODEL_SAVE_FILE_PATH}debugging_df.csv")
+    df2.to_csv(f"{const.MODEL_SAVE_FILE_PATH}")
     print("saing df via spark")
     df.write.csv("Debugging_test.csv")
     print(vars(m))
