@@ -120,6 +120,8 @@ class Model():
         model = self.methods[self.model_type]
         # Run model on training / evaluation data
         model_output = model(train, evaluation_data)
+
+        #TEsting - we've retunred combined rdd
         # Return model output
         return model_output
 
@@ -162,17 +164,17 @@ class Model():
         self.time_to_predict = end - start
 
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
-        self.ranking_metrics(predictions=ranking_predictions, labels=evaluation_data)
+        return self.ranking_metrics(predictions=ranking_predictions, labels=evaluation_data)
         #Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
         self.non_ranking_metrics(regression_predictions)        
         
 
         # Save model if we need to
-        if self.model_save:
-            self.save_model(model_type=self.model_type, model=als)
+        # if self.model_save:
+        #     self.save_model(model_type=self.model_type, model=als)
 
-        # Return top self.num_recs movie recs for each user
-        return userRecs
+        # # Return top self.num_recs movie recs for each user
+        # return userRecs
 
     # Baseline model that returns top X most popular items (highest avg rating)
     def baseline(self, training, evaluation_data):
@@ -209,25 +211,25 @@ class Model():
         self.time_to_predict = 0  # Recommends in constant time
 
         # Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
-        self.ranking_metrics(predictions=predictions, labels=evaluation_data)
+        return self.ranking_metrics(predictions=predictions, labels=evaluation_data)
 
         # Return The top 100 most popular movies above self.min_ratings threshold
-        return top_100_movies
+        #return top_100_movies
 
     #Non-Ranking Metrics Calculated Here
     def non_ranking_metrics(self,predictions):
         ##Evaluate Predictions for Regression Task##
         evaluator = RegressionEvaluator(labelCol="rating", predictionCol="prediction")
+        binary_predicts = predictions.withColumn("prediction", when(predictions.rating > 0, 1).otherwise(0).cast("double"))
+        binary_evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
         # Calculate RMSE and r_2 metrics and append to metrics
         self.metrics["rmse"] = evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
         self.metrics["r2"] = evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
 
         ##ROC Metric Evaluation##
         # Make predictions Binary
-        binary_predicts = predictions.withColumn("prediction", when(predictions.rating > 0, 1).otherwise(0).cast("double"))
-        evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
         # Append ROC to our Metrics list
-        self.metrics["ROC"] = evaluator.evaluate(binary_predicts)
+        self.metrics["ROC"] = binary_evaluator.evaluate(binary_predicts)
 
     def ranking_metrics(self, predictions, labels):
         """
@@ -252,6 +254,7 @@ class Model():
         ranking_metrics_data = label_inner_predictions.join(
                 pos_label_inner_prediction, 'userId').rdd.map(lambda row: (row[1], row[2]))
 
+        return ranking_metrics_data.toDF()
         #Get RankingMetrics object
         metrics = RankingMetrics(ranking_metrics_data)
         #Calculate MAP
