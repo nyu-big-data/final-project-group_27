@@ -22,9 +22,7 @@ def main(spark, model_size, model_type, model_args):
                           schema=const.TRAIN_VAL_TEST_SCHEMA)
     val = spark.read.csv(val_file_path,
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
-    print(f"Train Len: {train.count()}, Test Len: {test.count()}, Val Len: {val.count()}")
-    print("Partitions:")
-    print(train.rdd.getNumPartitions(),test.rdd.getNumPartitions(),val.rdd.getNumPartitions())
+
     # Pass through dictionary of keyword arguments to Model()
     reccomender_system = Model(model_size=model_size, model_type=model_type, **model_args)
     # Run the model
