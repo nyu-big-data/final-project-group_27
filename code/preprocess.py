@@ -40,10 +40,10 @@ class DataPreprocessor():
             flag = self.sanity_check(train,val,test)
             #If flag == True we're good
             if flag:
-                print("The val and test splits are disjoint!")
+                print("All Three Data Sets are Disjoint!")
             #Otherwise raise exception
             else:
-                raise Exception("The Validation and Test sets are not disjoint!")
+                raise Exception("One Pair of Train/Val/Test Sets are not disjoint, check stdout!")
 
         #Return train val test sets
         return train, val, test
@@ -95,9 +95,9 @@ class DataPreprocessor():
         #countD (count distinct of userId) - movieId forces a deterministic ranking based off movieId
         #Step 3: Filter max_dupes so we only grab top ranking movieIds
         windowSpec = Window.partitionBy("title").orderBy("countD","movieId")
-        max_dupes = dupes.groupBy(["title","movieId"]).agg(countDistinct("userId").alias("countD"))
+        max_dupes = dupes.groupBy(["title","movieId"]).agg(countDistinct("userId").alias("countD")).orderBy("countD",ascending=False)
         max_dupes = max_dupes.withColumn("dense_rank",dense_rank().over(windowSpec))
-        max_dupes = max_dupes.filter(max_dupes.dense_rank=="2")
+        max_dupes = max_dupes.filter(max_dupes.dense_rank=="1")
         max_dupes = max_dupes.drop("countD","dense_rank")
         
         #Get a list of movie ids ~len(5) for small - which are the ones we want to keep
@@ -118,7 +118,7 @@ class DataPreprocessor():
         #print(f"The length of the combined and de-deduped joined data-set is: {len(clean_data.collect())}")
 
         #Repartition for efficiency:
-        clean_data = clean_data.repartition(10)
+        clean_data = clean_data.repartition(30)
 
         #Return clean_data -> Type: Spark RDD Ready for more computation
         return clean_data
@@ -148,51 +148,54 @@ class DataPreprocessor():
         output: training 60%, val 20%, test 20% splits with colums cast to integer type and na's dropped
         -----
         """
-        #Type Cast the cols to numeric
-        ratings = clean_data.withColumn('movieId',col('movieId').cast(IntegerType())).withColumn("userId",col("userId").cast(IntegerType()))
-        #Drop nulls
+        #Drop Any Nan rows
+        ratings = clean_data
         ratings = ratings.na.drop("any")
     
-        #strategy, partition by userId, and userId order by date, 
-        #take the first 60% of reviews for all users
-        w1 = Window.partitionBy("userId")
-        w2 = Window.partitionBy("userId").orderBy("date")
-        ratings = (ratings.withColumn("row_num", row_number().over(w2))
-                       .withColumn('length', count('userId').over(w1))
-                  )
 
-        #store in training RDD by 
-        #selecting all rows where the row_count for that user <= 60% total reviews for that user
+        #Coalesce data frame into one partition so window functions are accurate
+        ratings = ratings.coalesce(1)
+        row_number_window = Window.partitionBy("userId").orderBy("date","movieId")
+        #Get Row Numer for each user - ordered by date/movieId to ensure determinist ranking
+        ratings = ratings.withColumn("row_number",row_number().over(row_number_window))
+        #Create percentiles for the data
+        ratings = ratings.withColumn("ntile",ntile(10).over(row_number_window).cast("integer"))
+        #Take First 6 Percentiles, label them Training, last 4 Are Evaluation
+        ratings = ratings.withColumn("trainEval", when(ratings.ntile > 6, "Eval").otherwise("Train"))
+        #Persist to ensure no data leakage
+        ratings = ratings.persist()
         
-        training = ratings.filter("row_num <=.6*length")
-        #now for validation and test set, we want those to have no users in common, but for them to
-        #be approximately equal size. 
-        holdout_df = ratings.filter("row_num >.6*length")
         
-        #strategy, of the data not in my train set, group users by number of movies they have seen
-        #sort descending
-        holdout_split = holdout_df.groupBy("userId").count().orderBy("count", ascending=False).toPandas()
+        #Split Data into Training / Evaluation Sets
+        training = ratings.filter(col("trainEval")=="Train")
+        eval_data = ratings.filter(col("trainEval")=="Eval")
         
-        #store the list of userIds sorted by descending total movie count
-        holdout_split = list(holdout_split.userId)
-        
-        #partition list of userIds by taking every other index and putting it in the validation set
-        val_users = holdout_split[::2]
-        
-        #create a validation and test set by filtering holdout data based on whether movieId isin val_users
-        val = holdout_df.filter(holdout_df.userId.isin(val_users))
-        test = holdout_df.filter(~holdout_df.userId.isin(val_users))
+        #Bifurcate the Evaluation Data based on userId - This gives us our approximate splits 20% Val 20% Test Splits
+        val = eval_data.filter(col("userId")%2==0)
+        test = eval_data.filter(col("userId")%2==1)
 
-        #Repartition for efficiency
-        training = training.coalesce(1)
-        val = val.coalesce(1)
-        test = test.coalesce(1)
+        #Repartition for computational efficiency
+        training = training.repartition(30)
+        val = val.repartition(30)
+        test = test.repartition(30)
         #Return train/val/test splits
         return training, val, test
-
-    #TO DO?? Should we enforce min_review cutoff to make sure no cold-start for any prediction?
-    def enforce_min_review(self):
-        pass
+    
+    def data_leakage_check(self,train,val):
+        """
+        Check to make sure that training and validation sets are disjoint on (userId,movieId) pairs
+        This function will print out the overlap if there is any - Returns True if the check is passed clean
+        """
+        #Check if there are any overlapping_ids between Train / Validation
+        cond = [train.userId == val.userId, train.movieId == val.movieId]   #Double Join Condition
+        overllaping_ids = train.join(val, cond,how='inner').count()         #Join Data on Inner - Get Count()
+        #If there is overlap raise error
+        if overllaping_ids != 0:
+            overlap = train.join(val, cond,how='inner').select(val.userId,val.movieId).take(20)
+            overlap = [(x[0],x[1]) for x in overlap]
+            print(f"First 20 Overlapping movieIds Between Set1 and Set2: {overlap}")
+        #Return True if they're disjoint, False if there's overlap
+        return overllaping_ids == 0
 
     #Check to train/val/test splits to make sure approx 60/20/20 split is achieved
     def sanity_check(self,train,val,test):
@@ -211,15 +214,30 @@ class DataPreprocessor():
         """
 
         #Get observatio counts for training, val, and test sets
-        training_obs = train.count()
-        val_obs = val.count()
-        test_obs = test.count()
+        training_obs, val_obs, test_obs = train.count(), val.count(), test.count()
+        total = training_obs + val_obs + test_obs
+        #Calculate Percentage Splits
+        percent_train = np.round((training_obs/total)*100,2)
+        percent_val = np.round((val_obs/total)*100,2)
+        percent_test = np.round((test_obs/total)*100,2)
 
-        #Print them out
-        print(f"Training Data Len: {training_obs} Val Len: {val_obs}, Test Len: {test_obs}")
-        print(f"Partitions, Train: {train.rdd.getNumPartitions()}, Val: {val.rdd.getNumPartitions()}, Test: {test.rdd.getNumPartitions()}")
-        #Check if there are any overlapping_ids in the sets
-        overllaping_ids = val.join(test, test.userId==val.userId,how='inner').count()
+        #Check for Train/Val Leakage
+        train_val_check = self.train_leakage_check(train,val)
+        if train_val_check == True:
+            print(f"Train/Val Leakage Test Passed!")
+        #Check for Train/Test Leakage
+        train_test_check = self.train_leakage_check(train,test)
+        if  train_test_check == True:
+            print(f"Train/Test Leakage Test Passed!")
+        val_test_check = self.train_leakage_check(val,test)
+        #Check for Val/Test Leakage
+        if val_test_check == True:
+            print(f"Val/Test Leakage Test Passed!")
         
-        #Return True if they're disjoint, False if there's overlap
-        return overllaping_ids == 0
+        #Print Stats
+        print(f"Training Data Len: {training_obs} Val Len: {val_obs}, Test Len: {test_obs}")
+        print(f"Training {percent_train}%, Val {percent_val}%, Test {percent_test}%")
+        print(f"Partitions, Train: {train.rdd.getNumPartitions()}, Val: {val.rdd.getNumPartitions()}, Test: {test.rdd.getNumPartitions()}")
+
+        #Need all 3 to evaluate to True 
+        return train_val_check and train_test_check and val_test_check

@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import code.constants as const
 import pyspark
 from pyspark.sql import SparkSession
 from pyspark.ml.evaluation import RegressionEvaluator
@@ -13,7 +12,7 @@ from pyspark.sql import Row
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.sql.functions import *
 from pyspark.sql.window import Window
-
+import code.constants as const
 
 class Model():
     """
@@ -56,16 +55,16 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold = 0):
+                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold = 0, k = 100):
         # Model Attributes
         # NO Arg needed to be passed thorugh
-        self.netID = const.netID
         # Dictionary to access variable methods
+        self.netId = const.netID
         self.methods = {"als": self.alternatingLeastSquares,
                         "baseline": self.baseline}
         # Top X number of reccomendations to return - set to 100, probably won't change
         self.num_recs = num_recs
-
+        self.k = k
         # Passed through by user
         self.model_size = model_size
         self.model_type = model_type
@@ -117,10 +116,8 @@ class Model():
             evaluation_data = test
 
         # Grab method for whichever model corresponds to self.model_type
-        print("selecting model")
         model = self.methods[self.model_type]
         # Run model on training / evaluation data
-        print("getting model output")
         model_output = model(train, evaluation_data)
         # Return model output
         return model_output
@@ -158,18 +155,17 @@ class Model():
         regression_predictions = model.transform(evaluation_data)
         #Generate 100 Top Movies for All Users
         userRecs = model.recommendForAllUsers(self.num_recs)
+
         #Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
-        ranking_predictions = userRecs.select("userId",explode("recommendations.movieId"))
+        #ranking_predictions = userRecs.select("userId",explode("recommendations.movieId"))
         end = time.time()
         self.time_to_predict = end - start
 
-        print("Calculating Ranking Metrics")
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
-        self.ranking_metrics(predictions=ranking_predictions, labels=evaluation_data)
+        self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(preds=userRecs, labels=evaluation_data, k=self.k)
         #Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
-        self.non_ranking_metrics(regression_predictions)        
+        self.metrics['RMSE'],self.metrics['R2'],self.metrics['ROC'], = self.non_ranking_metrics(regression_predictions)        
         
-
         # Save model if we need to
         if self.model_save:
             self.save_model(model_type=self.model_type, model=als)
@@ -197,80 +193,80 @@ class Model():
         # Time model Fit
         start = time.time()
         # Get Top 100 Most Popular Movies - Avg(rating) becomes prediction
-        top_100_movies = training.groupBy("movieId").agg(avg("rating").alias("prediction"),
-                                                         count("movieId").alias("movie_count")).where(f"movie_count>={self.min_ratings}").\
-            orderBy("prediction", ascending=False).limit(100)
+        temp = training
+        top_100_movies = temp.groupBy("movieId").agg(avg("rating").alias("prediction"),count("movieId").alias("movie_count"))
+        top_100_movies = top_100_movies.where(col("movie_count")>=self.min_ratings)
+        top_100_movies = top_100_movies.select("movieId").orderBy("prediction", ascending=False).limit(100)
+        
         # Grab Distinct User Ids
-        ids = evaluation_data.select("userId").distinct()
+        temp2 = evaluation_data
+        ids = temp2.select("userId").distinct()
         # Cross Join Distinct userIds with Top 100 Most Popular Movies
         predictions = ids.crossJoin(top_100_movies)
+        
         # Record end time after RDD operations
         end = time.time()
         self.time_to_fit = end - start
 
         # Time predictions as well
         self.time_to_predict = 0  # Recommends in constant time
-
-        # Use self.record_metrics to evaluate model on RMSE, R^2, Precision at K, Mean Precision, and NDGC
-        precision, MAP = self.ranking_metrics(predictions=predictions, labels=evaluation_data)
-
-        self.metrics['precision'] = precision
-        self.metrics['MAP'] = MAP
-        print(self.metrics['precision'],self.metrics['MAP'])
+        self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(preds=predictions, labels=evaluation_data, k=self.k)
+        
         # Return The top 100 most popular movies above self.min_ratings threshold
-        return top_100_movies
+        return predictions
 
     #Non-Ranking Metrics Calculated Here
     def non_ranking_metrics(self,predictions):
+        """
+        Input: 
+        predictions
+        Output:
+        rmse: evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
+        r2: evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
+        roc: evaluator.evaluate(binary_predicts)
+        """
         ##Evaluate Predictions for Regression Task##
         evaluator = RegressionEvaluator(labelCol="rating", predictionCol="prediction")
         # Calculate RMSE and r_2 metrics and append to metrics
-        self.metrics["rmse"] = evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
-        self.metrics["r2"] = evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
+        rmse = evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
+        r2 = evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
 
         ##ROC Metric Evaluation##
         # Make predictions Binary
         binary_predicts = predictions.withColumn("prediction", when(predictions.rating > 0, 1).otherwise(0).cast("double"))
         evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
         # Append ROC to our Metrics list
-        self.metrics["ROC"] = evaluator.evaluate(binary_predicts)
-
-    def ranking_metrics(self, predictions, labels):
+        roc = evaluator.evaluate(binary_predicts)
+        return rmse,r2,roc
+   
+    def OTB_ranking_metrics(self,preds,labels,k):
         """
-        Method that will contain all the code to evaluate model on metrics: RMSE, R^2, ROC, Precistion At K, Mean Precision, and NDGC
-        input:
-        -----
-        predictions: RDD - PySpark Dataframe containing the following columns at the minimum: [userId,movieId,prediction] - if not baseline model must include rating column
-        labels: RDD - PySpark Dataframe containing the following columns at the minimum: [userId,movieId,rating, date]
-        -----
-        returns: 
-        None - Writes the results to self.metrics dictionary
+        Input: 
+        preds: DF - Tall DF of userId, movieId predictions
+        labels: DF - 
+        k: int - used in precisionAt(k), ndgcAt(k)
+        Output:
+        rankingMetrics.meanAveragePrecision
+        rankingMetrics.recallAt(k)
+        rankingMetrics.ndcgAt(k)
         """
-        
-        print("Starting Ranking Metrics")
-        #Join labels and predictions on [userId,movieId]
-        label_inner_predictions = labels.join(predictions, ['userId', 'movieId'], how ='inner').select('userId', 'movieId', "rating")
+        if self.model_type == 'baseline':
+            perUserPredictedItemsDF = preds \
+                .select('userId', 'movieId')\
+                .groupBy('userId') \
+                .agg(expr('collect_list(movieId) as movieId'))
 
-        #Collect ratings by userId where the rating is above some self.review_score_threshold -> userId, [movie1,...movieN]
-        pos_label_inner_prediction = label_inner_predictions.where(f"rating>{self.positive_rating_threshold}"\
-                                            ).groupBy('userId').agg(expr('collect_list(movieId) as movieId'))
-        label_inner_predictions = label_inner_predictions.groupBy('userId').agg(expr('collect_list(movieId) as movieId'))
-        
-        ranking_metrics_data = label_inner_predictions.join(
-                pos_label_inner_prediction, 'userId').rdd.map(lambda row: (row[1], row[2]))
-        
-        ranking_metrics_data = ranking_metrics_data.coalesce(1)
+        perUserActualItemsDF = labels \
+            .select('userId', 'movieId')\
+            .groupBy('userId') \
+            .agg(expr('collect_list(movieId) as movieId'))
 
-        print(f"Ranking_Metrics_data Partitions:{ranking_metrics_data.getNumPartitions()}")
-        #Get RankingMetrics object
-        metrics = RankingMetrics(ranking_metrics_data)
-        #Calculate MAP
-        # self.metrics['Precision - Intersection'] = metrics.recallAt(self.num_recs)
-        # self.metrics['MAP - Intersection'] = metrics.meanAveragePrecision
-        precision = metrics.recallAt(self.num_recs)
-        MAP = metrics.meanAveragePrecision
-        print(f"Computed precision: {precision}, and MAP: {MAP}")
-        return precision,MAP
+        perUserItemsRDD = perUserPredictedItemsDF.join(broadcast(perUserActualItemsDF), 'userId', 'inner') \
+            .rdd \
+            .map(lambda row: (row[1], row[2]))
+        rankingMetrics = RankingMetrics(perUserItemsRDD)
+        return rankingMetrics.meanAveragePrecision, rankingMetrics.precisionAt(k), rankingMetrics.recallAt(k), rankingMetrics.ndcgAt(k)
+
     # Method to save model to const.MODEL_SAVE_FILE_PATH
     def save_model(self, model_type=None, model=None):
         """
@@ -286,3 +282,14 @@ class Model():
         # Otherwise throw error
         else:
             raise Exception("Model and or Model_type not passed through")
+
+    def baseline_prediction_check(self, preds):
+        m_ids = preds.groupBy("movieId").count().collect()
+        m_ids = np.array([int(x[1]) for x in m_ids])
+        u_ids = preds.groupBy("userId").count().collect()
+        u_ids = np.array([int(x[1]) for x in u_ids])
+        if m_ids.sum()/len(u_ids) != len(m_ids):
+            raise Exception(f"Baseline Predicts are Wrong, movieId count = {m_ids.sum()}, len:{len(y)}")
+        if u_ids.sum()/len(m_ids) != len(u_ids):
+            raise Exception(f"Baseline predictions are wrong, userId count = {u_ids.sum()}, len:{len(y)}")
+        print("Passed Baseline Prediction Check")
