@@ -256,7 +256,7 @@ class Model():
                 .groupBy('userId') \
                 .agg(expr('collect_list(movieId) as movieId'))
         else:
-            perUserActualItemsDF = preds
+            perUserPredictedItemsDF = preds
 
         perUserActualItemsDF = labels \
             .select('userId', 'movieId')\
