@@ -222,14 +222,14 @@ class DataPreprocessor():
         percent_test = np.round((test_obs/total)*100,2)
 
         #Check for Train/Val Leakage
-        train_val_check = self.train_leakage_check(train,val)
+        train_val_check = self.data_leakage_check(train,val)
         if train_val_check == True:
             print(f"Train/Val Leakage Test Passed!")
         #Check for Train/Test Leakage
-        train_test_check = self.train_leakage_check(train,test)
+        train_test_check = self.data_leakage_check(train,test)
         if  train_test_check == True:
             print(f"Train/Test Leakage Test Passed!")
-        val_test_check = self.train_leakage_check(val,test)
+        val_test_check = self.data_leakage_check(val,test)
         #Check for Val/Test Leakage
         if val_test_check == True:
             print(f"Val/Test Leakage Test Passed!")
