@@ -3,11 +3,13 @@ from code.model import Model
 import code.constants as const
 import sys
 import json
+import numpy as np
+
 
 # Main Function that will define model behavior
 
 
-def main(spark, model_size, k):
+def main(spark, model_size, k,step=1):
 
     # Grab the filepaths for model_size
     train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
@@ -20,7 +22,7 @@ def main(spark, model_size, k):
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
 
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
-    for i in range(0,k+1):
+    for i in range(0,k+step):
         # Pass through dictionary of keyword arguments to Model()
         reccomender_system = Model(model_size=model_size, model_type='baseline', min_ratings=i)
         # Run the model
@@ -30,7 +32,7 @@ def main(spark, model_size, k):
         instance_vars = vars(reccomender_system)
         #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
         del instance_vars["methods"]
-        del instance_vars["ranking_metrics_data"]
+
         # Write our results and model parameters
         print("Recording the model_params")
         with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
@@ -47,9 +49,10 @@ if __name__ == '__main__':
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
     k = int(sys.argv[2])
+    step = int(sys.argv[3])
 
     # Make sure input is valid
     if model_size not in ['small', 'large']:
         raise Exception(f"Model Size must either be 'small' or 'large', you entered {model_size}")
     #Call Main
-    main(spark, model_size, k)
+    main(spark, model_size, k, step)
