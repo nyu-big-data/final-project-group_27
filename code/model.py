@@ -56,7 +56,7 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold=0, k=100, sanity_check = False):
+                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold=0, k=100, sanity_check = None):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         # Dictionary to access variable methods
@@ -117,11 +117,13 @@ class Model():
             evaluation_data = test
 
         #Check for leakage between the sets
-        if self.sanity_check == True:
+        if self.sanity_check:
             tester = UnitTest()
             if tester.data_leakage_check(train=train,val=evaluation_data) == False:
                 raise Exception("Data Leakage Occured - Check stdout")
-
+            else:
+                print(f"Passed Data Leakage Check Between Train and {self.evaluation_data_name}")
+                
         # Grab method for whichever model corresponds to self.model_type
         model = self.methods[self.model_type]
         # Run model on training / evaluation data

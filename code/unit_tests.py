@@ -14,7 +14,7 @@ class UnitTest():
         pass
     # Check to train/val/test splits to make sure approx 60/20/20 split is achieved
 
-    def sanity_check(self, train, val, test):
+    def sanity_check(self, train=None, val=None, test=None):
         """
         Method to print out the shape of train/val/test splits, and a check to make sure that
         val and test splits are disjoint (no distinct userId appears in both)
