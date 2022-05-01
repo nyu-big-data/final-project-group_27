@@ -7,6 +7,7 @@ from pyspark.sql.functions import *
 from pyspark.sql.window import Window
 from pyspark.sql import Row
 from pyspark.sql.types import IntegerType
+from code.unit_tests import UnitTest
 
 #A class used to preprocess data and to return train/val/test splits
 class DataPreprocessor():
@@ -37,7 +38,8 @@ class DataPreprocessor():
         
         #Check if we should perform sanity check
         if sanity_checker:
-            flag = self.sanity_check(train,val,test)
+            tester = UnitTest()
+            flag = tester.sanity_check(train,val,test)
             #If flag == True we're good
             if flag:
                 print("All Three Data Sets are Disjoint!")
@@ -180,64 +182,3 @@ class DataPreprocessor():
         test = test.repartition(30)
         #Return train/val/test splits
         return training, val, test
-    
-    def data_leakage_check(self,train,val):
-        """
-        Check to make sure that training and validation sets are disjoint on (userId,movieId) pairs
-        This function will print out the overlap if there is any - Returns True if the check is passed clean
-        """
-        #Check if there are any overlapping_ids between Train / Validation
-        cond = [train.userId == val.userId, train.movieId == val.movieId]   #Double Join Condition
-        overllaping_ids = train.join(val, cond,how='inner').count()         #Join Data on Inner - Get Count()
-        #If there is overlap raise error
-        if overllaping_ids != 0:
-            overlap = train.join(val, cond,how='inner').select(val.userId,val.movieId).take(20)
-            overlap = [(x[0],x[1]) for x in overlap]
-            print(f"First 20 Overlapping movieIds Between Set1 and Set2: {overlap}")
-        #Return True if they're disjoint, False if there's overlap
-        return overllaping_ids == 0
-
-    #Check to train/val/test splits to make sure approx 60/20/20 split is achieved
-    def sanity_check(self,train,val,test):
-        """
-        Method to print out the shape of train/val/test splits, and a check to make sure that
-        val and test splits are disjoint (no distinct userId appears in both)
-        input:
-        -----
-        train: RDD - Training data split created from .create_train_val_test_splits
-        val: RDD - Validation data split created from .create_train_val_test_splits
-        test: RDD - Testing data split created from .create_train_val_test_splits
-        -----
-        output:
-        -----
-        returnFlag: boolean - True means test and val splits are disjoint on userId
-        """
-
-        #Get observatio counts for training, val, and test sets
-        training_obs, val_obs, test_obs = train.count(), val.count(), test.count()
-        total = training_obs + val_obs + test_obs
-        #Calculate Percentage Splits
-        percent_train = np.round((training_obs/total)*100,2)
-        percent_val = np.round((val_obs/total)*100,2)
-        percent_test = np.round((test_obs/total)*100,2)
-
-        #Check for Train/Val Leakage
-        train_val_check = self.data_leakage_check(train,val)
-        if train_val_check == True:
-            print(f"Train/Val Leakage Test Passed!")
-        #Check for Train/Test Leakage
-        train_test_check = self.data_leakage_check(train,test)
-        if  train_test_check == True:
-            print(f"Train/Test Leakage Test Passed!")
-        val_test_check = self.data_leakage_check(val,test)
-        #Check for Val/Test Leakage
-        if val_test_check == True:
-            print(f"Val/Test Leakage Test Passed!")
-        
-        #Print Stats
-        print(f"Training Data Len: {training_obs} Val Len: {val_obs}, Test Len: {test_obs}")
-        print(f"Training {percent_train}%, Val {percent_val}%, Test {percent_test}%")
-        print(f"Partitions, Train: {train.rdd.getNumPartitions()}, Val: {val.rdd.getNumPartitions()}, Test: {test.rdd.getNumPartitions()}")
-
-        #Need all 3 to evaluate to True 
-        return train_val_check and train_test_check and val_test_check

@@ -13,6 +13,7 @@ from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.sql.functions import *
 from pyspark.sql.window import Window
 import code.constants as const
+from code.unit_tests import UnitTest
 
 class Model():
     """
@@ -55,7 +56,7 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold = 0, k = 100):
+                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold=0, k=100, sanity_check = False):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         # Dictionary to access variable methods
@@ -69,7 +70,7 @@ class Model():
         self.model_size = model_size
         self.model_type = model_type
         self.positive_rating_threshold = positive_rating_threshold
-
+        self.sanity_check = sanity_check
         # For ALS
         self.rank = rank  # Rank of latent factors used in decomposition
         self.maxIter = maxIter  # Number of iterations to run algorithm, recommended 5-20
@@ -115,6 +116,12 @@ class Model():
             self.evaluation_data_name = "Test"
             evaluation_data = test
 
+        #Check for leakage between the sets
+        if self.sanity_check == True:
+            tester = UnitTest()
+            if tester.data_leakage_check(train=train,val=evaluation_data) == False:
+                raise Exception("Data Leakage Occured - Check stdout")
+
         # Grab method for whichever model corresponds to self.model_type
         model = self.methods[self.model_type]
         # Run model on training / evaluation data
@@ -153,19 +160,22 @@ class Model():
         # Time predictions as well
         start = time.time()
         regression_predictions = model.transform(evaluation_data)
-        #Generate 100 Top Movies for All Users
+        # Generate 100 Top Movies for All Users
         userRecs = model.recommendForAllUsers(self.num_recs)
 
-        #Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
-        #ranking_predictions = userRecs.select("userId",explode("recommendations.movieId"))
+        # Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
+        ranking_predictions = userRecs.select(
+            "userId", explode("recommendations.movieId"))
         end = time.time()
         self.time_to_predict = end - start
 
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
-        self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(preds=userRecs, labels=evaluation_data, k=self.k)
-        #Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
-        self.metrics['RMSE'],self.metrics['R2'],self.metrics['ROC'], = self.non_ranking_metrics(regression_predictions)        
-        
+        self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
+            preds=ranking_predictions, labels=evaluation_data, k=self.k)
+        # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
+        self.metrics['RMSE'], self.metrics['R2'], self.metrics['ROC'], = self.non_ranking_metrics(
+            regression_predictions)
+
         # Save model if we need to
         if self.model_save:
             self.save_model(model_type=self.model_type, model=als)
@@ -186,37 +196,48 @@ class Model():
         -----
         output: RDD of Top 100 movieIds by avg(rating)
         """
-        #Make sure the right params have been passed to Model()
+        # Make sure the right params have been passed to Model()
         if self.min_ratings is None:
-            raise Exception("Must pass through a value for self.min_ratings for baselien to compute")
+            raise Exception(
+                "Must pass through a value for self.min_ratings for baseline to compute")
 
         # Time model Fit
         start = time.time()
         # Get Top 100 Most Popular Movies - Avg(rating) becomes prediction
         temp = training
-        top_100_movies = temp.groupBy("movieId").agg(avg("rating").alias("prediction"),count("movieId").alias("movie_count"))
-        top_100_movies = top_100_movies.where(col("movie_count")>=self.min_ratings)
-        top_100_movies = top_100_movies.select("movieId").orderBy("prediction", ascending=False).limit(100)
-        
+        top_100_movies = temp.groupBy("movieId").agg(avg("rating").alias(
+            "prediction"), count("movieId").alias("movie_count"))
+        top_100_movies = top_100_movies.where(
+            col("movie_count") >= self.min_ratings)
+        top_100_movies = top_100_movies.select("movieId").orderBy(
+            "prediction", ascending=False).limit(100)
+
         # Grab Distinct User Ids
         temp2 = evaluation_data
         ids = temp2.select("userId").distinct()
         # Cross Join Distinct userIds with Top 100 Most Popular Movies
         predictions = ids.crossJoin(top_100_movies)
-        
+
         # Record end time after RDD operations
         end = time.time()
         self.time_to_fit = end - start
 
+        #If sanity_checker = True then 
+        if self.sanity_check == True:
+            tester = UnitTest()
+            tester.baseline_prediction_check(preds=predictions)
+
         # Time predictions as well
         self.time_to_predict = 0  # Recommends in constant time
-        self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(preds=predictions, labels=evaluation_data, k=self.k)
-        
+        self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
+            preds=predictions, labels=evaluation_data, k=self.k)
+
+        self.metrics["Custom Precision"], self.metrics["Custom Recall"] = self.baseline_CUSTOM_ranking_metrics(preds=predictions, labels=evaluation_data)
         # Return The top 100 most popular movies above self.min_ratings threshold
         return predictions
 
-    #Non-Ranking Metrics Calculated Here
-    def non_ranking_metrics(self,predictions):
+    # Non-Ranking Metrics Calculated Here
+    def non_ranking_metrics(self, predictions):
         """
         Input: 
         predictions
@@ -226,20 +247,23 @@ class Model():
         roc: evaluator.evaluate(binary_predicts)
         """
         ##Evaluate Predictions for Regression Task##
-        evaluator = RegressionEvaluator(labelCol="rating", predictionCol="prediction")
+        evaluator = RegressionEvaluator(
+            labelCol="rating", predictionCol="prediction")
         # Calculate RMSE and r_2 metrics and append to metrics
         rmse = evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
         r2 = evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
 
         ##ROC Metric Evaluation##
         # Make predictions Binary
-        binary_predicts = predictions.withColumn("prediction", when(predictions.rating > 0, 1).otherwise(0).cast("double"))
-        evaluator = BinaryClassificationEvaluator(rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
+        binary_predicts = predictions.withColumn("prediction", when(
+            predictions.rating > 0, 1).otherwise(0).cast("double"))
+        evaluator = BinaryClassificationEvaluator(
+            rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
         # Append ROC to our Metrics list
         roc = evaluator.evaluate(binary_predicts)
-        return rmse,r2,roc
-   
-    def OTB_ranking_metrics(self,preds,labels,k):
+        return rmse, r2, roc
+
+    def OTB_ranking_metrics(self, preds, labels, k):
         """
         Input: 
         preds: DF - Tall DF of userId, movieId predictions
@@ -250,13 +274,11 @@ class Model():
         rankingMetrics.recallAt(k)
         rankingMetrics.ndcgAt(k)
         """
-        if self.model_type == 'baseline':
-            perUserPredictedItemsDF = preds \
-                .select('userId', 'movieId')\
-                .groupBy('userId') \
-                .agg(expr('collect_list(movieId) as movieId'))
-        else:
-            perUserPredictedItemsDF = preds
+
+        perUserPredictedItemsDF = preds \
+            .select('userId', 'movieId')\
+            .groupBy('userId') \
+            .agg(expr('collect_list(movieId) as movieId'))
 
         perUserActualItemsDF = labels \
             .select('userId', 'movieId')\
@@ -285,13 +307,76 @@ class Model():
         else:
             raise Exception("Model and or Model_type not passed through")
 
-    def baseline_prediction_check(self, preds):
-        m_ids = preds.groupBy("movieId").count().collect()
-        m_ids = np.array([int(x[1]) for x in m_ids])
-        u_ids = preds.groupBy("userId").count().collect()
-        u_ids = np.array([int(x[1]) for x in u_ids])
-        if m_ids.sum()/len(u_ids) != len(m_ids):
-            raise Exception(f"Baseline Predicts are Wrong, movieId count = {m_ids.sum()}, len:{len(y)}")
-        if u_ids.sum()/len(m_ids) != len(u_ids):
-            raise Exception(f"Baseline predictions are wrong, userId count = {u_ids.sum()}, len:{len(y)}")
-        print("Passed Baseline Prediction Check")
+    def baseline_CUSTOM_ranking_metrics(self, preds, labels):
+        """
+        Input: preds, labels - PySpark DFs
+        output: precision, recall - Float
+        """
+        # Dummy var
+        precision_arr = []
+        # Collect movie_recs into set
+        movie_recs = preds.select("userId", "movieId")\
+            .groupBy(col("userId"))\
+            .agg(collect_list(col("movieId")).alias("movieId")).collect()
+
+        labels = labels.withColumn("tuple", concat_ws(
+            ",", col("userId"), col("movieId")))
+
+        # Collect val labels into list
+        label_set = labels \
+            .select('userId', 'tuple', 'rating')\
+            .groupBy('userId') \
+            .agg(collect_list(col("tuple")).alias("tuple"), collect_list(col("rating")).alias("rating")).collect()
+
+        # grab arrays for calculating metrics
+        precision, recall = self.precision_and_recall(movie_recs, label_set)
+
+        return precision.sum()/len(precision), recall.sum()/len(recall)
+
+    def precision_and_recall(self, preds, eval_data):
+        """
+        preds: dataFrame of predictions, do not collect list, each row has one userid and one movieid
+        eval_data: validation or test set, same format as preds
+        returns: new rdd with intersection of both 
+
+        """
+        # generate set to check userid, movieid tuple
+        seen = set()
+        out_prec = list()
+        out_rec = list()
+
+        for row in preds:
+            for movieId in row[1]:
+                # add tuple of userId, movieId to set
+                seen.add(str(row[0])+","+str(movieId))
+
+        for row in eval_data:
+            # initialize intersection count variables
+            numerator, prec_denom, rec_denom = 0, 0, 0
+
+            # create temp list
+            temp = list()
+
+            # iterate over collected lists
+            keys = row[1]
+            ratings = row[2]
+
+            for i in range(len(keys)):
+                # is an element of v+
+                if ratings[i] > 0:
+                    rec_denom += 1
+                # is an element of p intersect v
+                if keys[i] in seen:
+                    prec_denom += 1
+
+                    # is and element of p intersect v+
+                    if ratings[i] > 0:
+                        numerator += 1
+
+            # calculate metrics
+            if prec_denom != 0:
+                out_prec.append(float(numerator/prec_denom))
+            if rec_denom != 0:
+                out_rec.append(float(numerator/rec_denom))
+        # Return np.arrays of precision and recall
+        return np.array(out_prec), np.array(out_rec)
