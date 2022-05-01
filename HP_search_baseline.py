@@ -22,7 +22,7 @@ def main(spark, model_size, k,step=1):
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
 
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
-    for i in range(0,k+step):
+    for i in range(0,k+step,step):
         # Pass through dictionary of keyword arguments to Model()
         reccomender_system = Model(model_size=model_size, model_type='baseline', min_ratings=i)
         # Run the model
