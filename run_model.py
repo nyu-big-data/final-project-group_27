@@ -27,13 +27,12 @@ def main(spark, model_size, model_type, model_args):
     reccomender_system = Model(model_size=model_size, model_type=model_type, **model_args)
     # Run the model
     reccomender_system.run_model(train=train, val=val)
-    print(vars(reccomender_system))
+
     #Grab the key:value pairs of instance variables
     instance_vars = vars(reccomender_system)
     #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
     del instance_vars["methods"]
 
-    print(instance_vars)
     # Write our results and model parameters
     print(f"Recording the model_params to: {const.RESULTS_SAVE_FILE_PATH}")
     with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
