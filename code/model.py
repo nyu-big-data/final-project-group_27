@@ -165,7 +165,7 @@ class Model():
 
         # Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
         ranking_predictions = userRecs.select(
-            "userId", explode("recommendations.movieId"))
+            "userId", explode("recommendations.movieId").alias("movieId"))
         end = time.time()
         self.time_to_predict = end - start
 
@@ -275,20 +275,21 @@ class Model():
         rankingMetrics.ndcgAt(k)
         """
 
-        perUserPredictedItemsDF = preds \
+        predictions = preds \
             .select('userId', 'movieId')\
             .groupBy('userId') \
             .agg(expr('collect_list(movieId) as movieId'))
 
-        perUserActualItemsDF = labels \
+        labels = labels \
             .select('userId', 'movieId')\
             .groupBy('userId') \
             .agg(expr('collect_list(movieId) as movieId'))
 
-        perUserItemsRDD = perUserPredictedItemsDF.join(broadcast(perUserActualItemsDF), 'userId', 'inner') \
+        predictionsAndLabels = predictions.join(broadcast(labels), 'userId', 'inner') \
             .rdd \
             .map(lambda row: (row[1], row[2]))
-        rankingMetrics = RankingMetrics(perUserItemsRDD)
+
+        rankingMetrics = RankingMetrics(predictionsAndLabels)
         return rankingMetrics.meanAveragePrecision, rankingMetrics.precisionAt(k), rankingMetrics.recallAt(k), rankingMetrics.ndcgAt(k)
 
     # Method to save model to const.MODEL_SAVE_FILE_PATH
