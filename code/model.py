@@ -276,7 +276,7 @@ class Model():
         rankingMetrics.recallAt(k)
         rankingMetrics.ndcgAt(k)
         """
-
+        print("Running OTB Ranking Metrics")
         predictions = preds \
             .select('userId', 'movieId')\
             .groupBy('userId') \
@@ -315,8 +315,6 @@ class Model():
         Input: preds, labels - PySpark DFs
         output: precision, recall - Float
         """
-        # Dummy var
-        precision_arr = []
         # Collect movie_recs into set
         movie_recs = preds.select("userId", "movieId")\
             .groupBy(col("userId"))\
@@ -343,6 +341,7 @@ class Model():
         returns: new rdd with intersection of both 
 
         """
+        print("Running precision and recall")
         # generate set to check userid, movieid tuple
         seen = set()
         out_prec = list()
