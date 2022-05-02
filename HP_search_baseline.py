@@ -24,15 +24,19 @@ def main(spark, model_size, k,step=1):
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
     for i in range(0,k+step,step):
         # Pass through dictionary of keyword arguments to Model()
+
+        print("Running model")
         reccomender_system = Model(model_size=model_size, model_type='baseline', min_ratings=i)
         # Run the model
         reccomender_system.run_model(train, val)
 
         #Grab the key:value pairs of instance variables
         instance_vars = vars(reccomender_system)
+        print(f'instance vars: {instance_vars}')
         #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
         del instance_vars["methods"]
 
+        print("Writing results")
         # Write our results and model parameters
         print("Recording the model_params")
         with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
