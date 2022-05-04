@@ -171,8 +171,8 @@ class Model():
             preds=ranking_predictions, labels=evaluation_data, k=self.k)
 
         #Calculate precision / recall
-        self.metrics["Custom Precision"] = self.custom_precision(preds=ranking_predictions, eval_data=evaluation_data) 
-        self.metrics["Custom Recall"] = self.custom_recall(preds=ranking_predictions, eval_data=evaluation_data) 
+        self.metrics["Custom Precision"] = self.custom_precision(predictions=ranking_predictions, eval_data=evaluation_data) 
+        self.metrics["Custom Recall"] = self.custom_recall(predictions=ranking_predictions, eval_data=evaluation_data) 
 
         # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
         self.metrics['RMSE'], self.metrics['R2'], self.metrics['ROC'], = self.non_ranking_metrics(
