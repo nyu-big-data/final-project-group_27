@@ -24,7 +24,6 @@ class Model():
     rank: int - Rank of latent factors used in decomposition
     maxIter: int - represents number of iterations to run algorithm
     regParam: float - Regularization Parameter
-    model_save: boolean - Flag to determine if we should save the model progress or not
     -----
     ### For baseline Model ###
     -----
@@ -49,8 +48,6 @@ class Model():
     run_model: Runs the corresponding method that was passed to self.model_type
     alternatingLeastSquares: Latent Factor model which uses the Alternating Least Squares Pyspark Class to fit and predict.
     baseline: uses a baseline popularity model that returns the top X most popular movies (decided by avg rating per movie)
-    record_metrics: Calculates metrics for prediction,label pairs
-    save_model: Used for advanced models like ALS or extensions where we may want to save the model itself
     -----
     """
 
@@ -74,9 +71,7 @@ class Model():
         # For ALS
         self.rank = rank  # Rank of latent factors used in decomposition
         self.maxIter = maxIter  # Number of iterations to run algorithm, recommended 5-20
-        self.regParam = regParam  # Regularization Parameter
-        # (Optional) Flag used to determine whether or not we should save our model somewhere
-        self.model_save = model_save
+        self.regParam = regParam  # Regularization Parameter        
 
         # For baseline
         # Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
@@ -174,13 +169,14 @@ class Model():
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
         self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
             preds=ranking_predictions, labels=evaluation_data, k=self.k)
+
+        #Calculate precision / recall
+        self.metrics["Custom Precision"] = self.custom_precision(preds=ranking_predictions, eval_data=evaluation_data) 
+        self.metrics["Custom Recall"] = self.custom_recall(preds=ranking_predictions, eval_data=evaluation_data) 
+
         # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
         self.metrics['RMSE'], self.metrics['R2'], self.metrics['ROC'], = self.non_ranking_metrics(
             regression_predictions)
-
-        # Save model if we need to
-        if self.model_save:
-            self.save_model(model_type=self.model_type, model=als)
 
         # Return top self.num_recs movie recs for each user
         return userRecs
@@ -234,7 +230,8 @@ class Model():
         self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
             preds=predictions, labels=evaluation_data, k=self.k)
 
-        self.metrics["Custom Precision"], self.metrics["Custom Recall"] = self.baseline_CUSTOM_ranking_metrics(preds=predictions, labels=evaluation_data)
+        self.metrics["Custom Precision"] = self.custom_precision(preds=predictions, eval_data=evaluation_data) 
+        self.metrics["Custom Recall"] = self.custom_recall(preds=predictions, eval_data=evaluation_data) 
         # Return The top 100 most popular movies above self.min_ratings threshold
         return predictions
 
@@ -294,91 +291,174 @@ class Model():
         rankingMetrics = RankingMetrics(predictionsAndLabels)
         return rankingMetrics.meanAveragePrecision, rankingMetrics.precisionAt(k), rankingMetrics.recallAt(k), rankingMetrics.ndcgAt(k)
 
-    # Method to save model to const.MODEL_SAVE_FILE_PATH
-    def save_model(self, model_type=None, model=None):
+    def custom_precision(self,predictions,eval_data) -> float:
         """
-        Inputs:
+        Function to calculate accuracy -> TP / (TP + FP)
+        True positives are movies we predicted they would like and they appeared in their evaluation set
+        and the user rated them positive. False Positives are movies that we predicted they liked, and they
+        watched them in their evaluation set, but did not rate them positively.
         -----
-        model_type: str - string designating what type of model is being saved
-        model: obj - model object that has .save method
+        input:
         -----
+        predictions: PySpark DF of movie predictions for baseline model
+        eval_data: PySpark DF of evaluation data
+        -----
+        output:
+        -----
+        float: accuracy calculated as TP / (TP + FP)
         """
-        # Make sure a non-null object was passed
-        if model and model_type:
-            model.save(const.MODEL_SAVE_FILE_PATH + model_type)
-        # Otherwise throw error
+        #Make our predictions equal to 1, as all movies are guessed as positive with baseline
+        if self.model_type == 'baseline':
+            predictions = predictions.withColumn("prediction",lit(1))
         else:
-            raise Exception("Model and or Model_type not passed through")
+            #Otherwise if we're doing something like an ALS model then we just binarize
+            predictions = predictions.withColumn("prediction", when(
+                predictions.rating > 0, 1).otherwise(0).cast("double"))
 
-    def baseline_CUSTOM_ranking_metrics(self, preds, labels):
+        #Set up join by aliasing and setting a join conidtion
+        preds = predictions.alias("preds")
+        labels = eval_data.alias("labels")
+        cond = [(labels.movieId == preds.movieId) & (labels.userId == preds.userId)]
+        
+        #Join
+        intersection = labels.join(preds, cond, how='inner').select(
+            labels.userId, labels.movieId, preds.prediction, labels.rating)
+        
+        #Binarize rating to positive / negative reviews -- make double
+        intersection = intersection.withColumn(
+            "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
+        intersection = intersection.withColumn("prediction",col("prediction").cast("double"))
+        
+        #Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
+        intersection = intersection.groupBy("userId").agg(sum(col("rating")).alias("TP"),sum(col("prediction")).alias("TPandFP"))
+
+        #Calculate precision
+        intersection = intersection.withColumn("precision",col("TP")/col("TPandFP"))
+        #Return mean accuracy across all userIds
+        return intersection.select("precision").agg({"precision":"avg"}).collect()[0][0]
+
+
+
+    def custom_recall(self, predictions, eval_data) -> float:
         """
-        Input: preds, labels - PySpark DFs
-        output: precision, recall - Float
+        Custom function to calculate model recall. True Positives (TP) are movies that we predicted the user would like
+        and they actually watched and liked it. False Negatives (FN) are movies we did not recommend
+        in the case of the baseline, or movies we predicted they would not like (for ALS) that the user ended up
+        watching in their evaluation set and rated positively.
+        -----
+        input:
+        -----
+        predictions: PySpark DF of movie predictions for baseline model
+        eval_data: PySpark DF of evaluation data
+        -----
+        output:
+        -----
+        float: recall caculated as Recall: TP / TP + FN
         """
-        # Collect movie_recs into set
-        movie_recs = preds.select("userId", "movieId")\
-            .groupBy(col("userId"))\
-            .agg(collect_list(col("movieId")).alias("movieId")).collect()
+        #Make our predictions equal to 1, as all movies are guessed as positive with baseline
+        if self.model_type == 'baseline':
+            predictions = predictions.withColumn("prediction",lit(1))
+        else:
+            #Otherwise if we're doing something like an ALS model then we just binarize
+            predictions = predictions.withColumn("prediction", when(
+                predictions.rating > 0, 1).otherwise(0).cast("double"))
+        #Make all predictions 1 as all baseline predictions are positive
+        predictions = predictions.withColumn("prediction",lit(1))
+        #Set up Join
+        preds = predictions.alias("preds")
+        labels = eval_data.alias("labels")
+        labels = labels.filter(col("rating")>0)
+        cond = [(labels.movieId == preds.movieId) & (labels.userId == preds.userId)]
 
-        labels = labels.withColumn("tuple", concat_ws(
-            ",", col("userId"), col("movieId")))
+        #Join - use left here so rows from labels are included
+        intersection = labels.join(preds,cond,how='left').select(
+                labels.userId, labels.movieId, preds.prediction, labels.rating)
 
-        # Collect val labels into list
-        label_set = labels \
-            .select('userId', 'tuple', 'rating')\
-            .groupBy('userId') \
-            .agg(collect_list(col("tuple")).alias("tuple"), collect_list(col("rating")).alias("rating")).collect()
+        #Make movies we didn't have a prediction for be 0 instead of null (these are False Negatives)
+        intersection = intersection.withColumn("prediction",when(col("prediction").isNull(), 0).otherwise(col("prediction")))
 
-        # grab arrays for calculating metrics
-        precision, recall = self.precision_and_recall(movie_recs, label_set)
+        #Binarize rating to positive / negative reviews -- make double
+        intersection = intersection.withColumn(
+            "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
+        intersection = intersection.withColumn("prediction",col("prediction").cast("double"))
 
-        return precision.sum()/len(precision), recall.sum()/len(recall)
+        #Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
+        intersection = intersection.groupBy("userId").agg(sum(col("rating")).alias("TPandFN"),sum(col("prediction")).alias("TP"))
 
-    def precision_and_recall(self, preds, eval_data):
-        """
-        preds: dataFrame of predictions, do not collect list, each row has one userid and one movieid
-        eval_data: validation or test set, same format as preds
-        returns: new rdd with intersection of both 
+        #Calculate recall
+        intersection = intersection.withColumn("recall",col("TP")/col("TPandFN"))
+        #Return mean recall across all userIds
+        return intersection.select("recall").agg({"recall":"avg"}).collect()[0][0]
 
-        """
-        print("Running precision and recall")
-        # generate set to check userid, movieid tuple
-        seen = set()
-        out_prec = list()
-        out_rec = list()
+    # def baseline_CUSTOM_ranking_metrics(self, preds, labels):
+    #     """
+    #     Input: preds, labels - PySpark DFs
+    #     output: precision, recall - Float
+    #     """
+    #     # Collect movie_recs into set
+    #     movie_recs = preds.select("userId", "movieId")\
+    #         .groupBy(col("userId"))\
+    #         .agg(collect_list(col("movieId")).alias("movieId")).collect()
 
-        for row in preds:
-            for movieId in row[1]:
-                # add tuple of userId, movieId to set
-                seen.add(str(row[0])+","+str(movieId))
+    #     labels = labels.withColumn("tuple", concat_ws(
+    #         ",", col("userId"), col("movieId")))
 
-        for row in eval_data:
-            # initialize intersection count variables
-            numerator, prec_denom, rec_denom = 0, 0, 0
+    #     # Collect val labels into list
+    #     label_set = labels \
+    #         .select('userId', 'tuple', 'rating')\
+    #         .groupBy('userId') \
+    #         .agg(collect_list(col("tuple")).alias("tuple"), collect_list(col("rating")).alias("rating")).collect()
 
-            # create temp list
-            temp = list()
+    #     # grab arrays for calculating metrics
+    #     precision, recall = self.precision_and_recall(movie_recs, label_set)
 
-            # iterate over collected lists
-            keys = row[1]
-            ratings = row[2]
+    #     return precision.sum()/len(precision), recall.sum()/len(recall)
 
-            for i in range(len(keys)):
-                # is an element of v+
-                if ratings[i] > 0:
-                    rec_denom += 1
-                # is an element of p intersect v
-                if keys[i] in seen:
-                    prec_denom += 1
+    # def precision_and_recall(self, preds, eval_data):
+    #     """
+    #     preds: dataFrame of predictions, do not collect list, each row has one userid and one movieid
+    #     eval_data: validation or test set, same format as preds
+    #     returns: new rdd with intersection of both 
 
-                    # is and element of p intersect v+
-                    if ratings[i] > 0:
-                        numerator += 1
+    #     """
+    #     print("Running precision and recall")
+    #     # generate set to check userid, movieid tuple
+    #     seen = set()
+    #     out_prec = list()
+    #     out_rec = list()
 
-            # calculate metrics
-            if prec_denom != 0:
-                out_prec.append(float(numerator/prec_denom))
-            if rec_denom != 0:
-                out_rec.append(float(numerator/rec_denom))
-        # Return np.arrays of precision and recall
-        return np.array(out_prec), np.array(out_rec)
+    #     for row in preds:
+    #         for movieId in row[1]:
+    #             # add tuple of userId, movieId to set
+    #             seen.add(str(row[0])+","+str(movieId))
+
+    #     for row in eval_data:
+    #         # initialize intersection count variables
+    #         numerator, prec_denom, rec_denom = 0, 0, 0
+
+    #         # create temp list
+    #         temp = list()
+
+    #         # iterate over collected lists
+    #         keys = row[1]
+    #         ratings = row[2]
+
+    #         for i in range(len(keys)):
+    #             # is an element of v+
+    #             if ratings[i] > 0:
+    #                 rec_denom += 1
+    #             # is an element of p intersect v
+    #             if keys[i] in seen:
+    #                 prec_denom += 1
+
+    #                 # is and element of p intersect v+
+    #                 if ratings[i] > 0:
+    #                     numerator += 1
+
+    #         # calculate metrics
+    #         if prec_denom != 0:
+    #             out_prec.append(float(numerator/prec_denom))
+    #         if rec_denom != 0:
+    #             out_rec.append(float(numerator/rec_denom))
+    #     # Return np.arrays of precision and recall
+    #     return np.array(out_prec), np.array(out_rec)
