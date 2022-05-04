@@ -230,8 +230,8 @@ class Model():
         self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
             preds=predictions, labels=evaluation_data, k=self.k)
 
-        self.metrics["Custom Precision"] = self.custom_precision(preds=predictions, eval_data=evaluation_data) 
-        self.metrics["Custom Recall"] = self.custom_recall(preds=predictions, eval_data=evaluation_data) 
+        self.metrics["Custom Precision"] = self.custom_precision(predictions=predictions, eval_data=evaluation_data) 
+        self.metrics["Custom Recall"] = self.custom_recall(predictions=predictions, eval_data=evaluation_data) 
         # Return The top 100 most popular movies above self.min_ratings threshold
         return predictions
 
