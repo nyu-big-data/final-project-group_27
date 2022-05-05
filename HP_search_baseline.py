@@ -9,7 +9,7 @@ import numpy as np
 # Main Function that will define model behavior
 
 
-def main(spark, model_size, k,step=1):
+def main(spark, model_size, start, end,step=1):
 
     # Grab the filepaths for model_size
     train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
@@ -22,7 +22,7 @@ def main(spark, model_size, k,step=1):
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
 
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
-    for i in range(0,k+step,step):
+    for i in range(start,end+step,step):
         # Pass through dictionary of keyword arguments to Model()
 
         print("Running model")
@@ -43,6 +43,9 @@ def main(spark, model_size, k,step=1):
             output_file.write(json.dumps(instance_vars))
             output_file.write("\n")
 
+        #Clear anything thats cached
+        spark.catalog.clearCache()
+
 # Enter this block if we're in __main__
 if __name__ == '__main__':
     """
@@ -52,11 +55,12 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('proj').getOrCreate()
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
-    k = int(sys.argv[2])
-    step = int(sys.argv[3])
+    start = int(sys.argv[2])
+    end = int(sys.argv[3])
+    step = int(sys.argv[4])
 
     # Make sure input is valid
     if model_size not in ['small', 'large']:
         raise Exception(f"Model Size must either be 'small' or 'large', you entered {model_size}")
     #Call Main
-    main(spark, model_size, k, step)
+    main(spark, model_size, start, end, step)
