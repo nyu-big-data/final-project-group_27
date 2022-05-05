@@ -15,6 +15,7 @@ from pyspark.sql.window import Window
 import code.constants as const
 from code.unit_tests import UnitTest
 
+
 class Model():
     """
     Abstract Model class that will contain various methods to deploy collaborative filtering.
@@ -53,7 +54,7 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold=0, k=100, sanity_check = None):
+                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold=0, k=100, sanity_check=None):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         # Dictionary to access variable methods
@@ -71,7 +72,7 @@ class Model():
         # For ALS
         self.rank = rank  # Rank of latent factors used in decomposition
         self.maxIter = maxIter  # Number of iterations to run algorithm, recommended 5-20
-        self.regParam = regParam  # Regularization Parameter        
+        self.regParam = regParam  # Regularization Parameter
 
         # For baseline
         # Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
@@ -111,14 +112,15 @@ class Model():
             self.evaluation_data_name = "Test"
             evaluation_data = test
 
-        #Check for leakage between the sets
+        # Check for leakage between the sets
         if self.sanity_check:
             tester = UnitTest()
-            if tester.data_leakage_check(train=train,val=evaluation_data) == False:
+            if tester.data_leakage_check(train=train, val=evaluation_data) == False:
                 raise Exception("Data Leakage Occured - Check stdout")
             else:
-                print(f"Passed Data Leakage Check Between Train and {self.evaluation_data_name}")
-                
+                print(
+                    f"Passed Data Leakage Check Between Train and {self.evaluation_data_name}")
+
         # Grab method for whichever model corresponds to self.model_type
         model = self.methods[self.model_type]
         # Run model on training / evaluation data
@@ -163,6 +165,10 @@ class Model():
         # Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
         ranking_predictions = userRecs.select(
             "userId", explode("recommendations.movieId").alias("movieId"))
+
+        # Get format for custom/precision / recall
+        custom_predictions = userRecs.select("userId", explode(
+            "recommendations").alias("tuple")).select("userId", "tuple.*")
         end = time.time()
         self.time_to_predict = end - start
 
@@ -170,9 +176,11 @@ class Model():
         self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
             preds=ranking_predictions, labels=evaluation_data, k=self.k)
 
-        #Calculate precision / recall
-        self.metrics["Custom Precision"] = self.custom_precision(predictions=ranking_predictions, eval_data=evaluation_data) 
-        self.metrics["Custom Recall"] = self.custom_recall(predictions=ranking_predictions, eval_data=evaluation_data) 
+        # Calculate precision / recall
+        self.metrics["Custom Precision"] = self.custom_precision(
+            predictions=custom_predictions, eval_data=evaluation_data)
+        self.metrics["Custom Recall"] = self.custom_recall(
+            predictions=custom_predictions, eval_data=evaluation_data)
 
         # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
         self.metrics['RMSE'], self.metrics['R2'], self.metrics['ROC'], = self.non_ranking_metrics(
@@ -220,7 +228,7 @@ class Model():
         end = time.time()
         self.time_to_fit = end - start
 
-        #If sanity_checker = True then 
+        # If sanity_checker = True then
         if self.sanity_check == True:
             tester = UnitTest()
             tester.baseline_prediction_check(preds=predictions)
@@ -230,8 +238,10 @@ class Model():
         self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
             preds=predictions, labels=evaluation_data, k=self.k)
 
-        self.metrics["Custom Precision"] = self.custom_precision(predictions=predictions, eval_data=evaluation_data) 
-        self.metrics["Custom Recall"] = self.custom_recall(predictions=predictions, eval_data=evaluation_data) 
+        self.metrics["Custom Precision"] = self.custom_precision(
+            predictions=predictions, eval_data=evaluation_data)
+        self.metrics["Custom Recall"] = self.custom_recall(
+            predictions=predictions, eval_data=evaluation_data)
         # Return The top 100 most popular movies above self.min_ratings threshold
         return predictions
 
@@ -291,7 +301,7 @@ class Model():
         rankingMetrics = RankingMetrics(predictionsAndLabels)
         return rankingMetrics.meanAveragePrecision, rankingMetrics.precisionAt(k), rankingMetrics.recallAt(k), rankingMetrics.ndcgAt(k)
 
-    def custom_precision(self,predictions,eval_data) -> float:
+    def custom_precision(self, predictions, eval_data) -> float:
         """
         Function to calculate accuracy -> TP / (TP + FP)
         True positives are movies we predicted they would like and they appeared in their evaluation set
@@ -307,37 +317,39 @@ class Model():
         -----
         float: accuracy calculated as TP / (TP + FP)
         """
-        #Make our predictions equal to 1, as all movies are guessed as positive with baseline
+        # Make our predictions equal to 1, as all movies are guessed as positive with baseline
         if self.model_type == 'baseline':
-            predictions = predictions.withColumn("prediction",lit(1))
+            predictions = predictions.withColumn("prediction", lit(1))
         else:
-            #Otherwise if we're doing something like an ALS model then we just binarize
+            # Otherwise if we're doing something like an ALS model then we just binarize
             predictions = predictions.withColumn("prediction", when(
                 predictions.rating > 0, 1).otherwise(0).cast("double"))
 
-        #Set up join by aliasing and setting a join conidtion
+        # Set up join by aliasing and setting a join conidtion
         preds = predictions.alias("preds")
         labels = eval_data.alias("labels")
-        cond = [(labels.movieId == preds.movieId) & (labels.userId == preds.userId)]
-        
-        #Join
+        cond = [(labels.movieId == preds.movieId)
+                & (labels.userId == preds.userId)]
+
+        # Join
         intersection = labels.join(preds, cond, how='inner').select(
             labels.userId, labels.movieId, preds.prediction, labels.rating)
-        
-        #Binarize rating to positive / negative reviews -- make double
+
+        # Binarize rating to positive / negative reviews -- make double
         intersection = intersection.withColumn(
             "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
-        intersection = intersection.withColumn("prediction",col("prediction").cast("double"))
-        
-        #Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
-        intersection = intersection.groupBy("userId").agg(sum(col("rating")).alias("TP"),sum(col("prediction")).alias("TPandFP"))
+        intersection = intersection.withColumn(
+            "prediction", col("prediction").cast("double"))
 
-        #Calculate precision
-        intersection = intersection.withColumn("precision",col("TP")/col("TPandFP"))
-        #Return mean accuracy across all userIds
-        return intersection.select("precision").agg({"precision":"avg"}).collect()[0][0]
+        # Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
+        intersection = intersection.groupBy("userId").agg(
+            sum(col("rating")).alias("TP"), sum(col("prediction")).alias("TPandFP"))
 
-
+        # Calculate precision
+        intersection = intersection.withColumn(
+            "precision", col("TP")/col("TPandFP"))
+        # Return mean accuracy across all userIds
+        return intersection.select("precision").agg({"precision": "avg"}).collect()[0][0]
 
     def custom_recall(self, predictions, eval_data) -> float:
         """
@@ -355,40 +367,45 @@ class Model():
         -----
         float: recall caculated as Recall: TP / TP + FN
         """
-        #Make our predictions equal to 1, as all movies are guessed as positive with baseline
+        # Make our predictions equal to 1, as all movies are guessed as positive with baseline
         if self.model_type == 'baseline':
-            predictions = predictions.withColumn("prediction",lit(1))
+            predictions = predictions.withColumn("prediction", lit(1))
         else:
-            #Otherwise if we're doing something like an ALS model then we just binarize
+            # Otherwise if we're doing something like an ALS model then we just binarize
             predictions = predictions.withColumn("prediction", when(
                 predictions.rating > 0, 1).otherwise(0).cast("double"))
-        #Make all predictions 1 as all baseline predictions are positive
-        predictions = predictions.withColumn("prediction",lit(1))
-        #Set up Join
+        # Make all predictions 1 as all baseline predictions are positive
+        predictions = predictions.withColumn("prediction", lit(1))
+        # Set up Join
         preds = predictions.alias("preds")
         labels = eval_data.alias("labels")
-        labels = labels.filter(col("rating")>0)
-        cond = [(labels.movieId == preds.movieId) & (labels.userId == preds.userId)]
+        labels = labels.filter(col("rating") > 0)
+        cond = [(labels.movieId == preds.movieId)
+                & (labels.userId == preds.userId)]
 
-        #Join - use left here so rows from labels are included
-        intersection = labels.join(preds,cond,how='left').select(
-                labels.userId, labels.movieId, preds.prediction, labels.rating)
+        # Join - use left here so rows from labels are included
+        intersection = labels.join(preds, cond, how='left').select(
+            labels.userId, labels.movieId, preds.prediction, labels.rating)
 
-        #Make movies we didn't have a prediction for be 0 instead of null (these are False Negatives)
-        intersection = intersection.withColumn("prediction",when(col("prediction").isNull(), 0).otherwise(col("prediction")))
+        # Make movies we didn't have a prediction for be 0 instead of null (these are False Negatives)
+        intersection = intersection.withColumn("prediction", when(
+            col("prediction").isNull(), 0).otherwise(col("prediction")))
 
-        #Binarize rating to positive / negative reviews -- make double
+        # Binarize rating to positive / negative reviews -- make double
         intersection = intersection.withColumn(
             "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
-        intersection = intersection.withColumn("prediction",col("prediction").cast("double"))
+        intersection = intersection.withColumn(
+            "prediction", col("prediction").cast("double"))
 
-        #Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
-        intersection = intersection.groupBy("userId").agg(sum(col("rating")).alias("TPandFN"),sum(col("prediction")).alias("TP"))
+        # Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
+        intersection = intersection.groupBy("userId").agg(
+            sum(col("rating")).alias("TPandFN"), sum(col("prediction")).alias("TP"))
 
-        #Calculate recall
-        intersection = intersection.withColumn("recall",col("TP")/col("TPandFN"))
-        #Return mean recall across all userIds
-        return intersection.select("recall").agg({"recall":"avg"}).collect()[0][0]
+        # Calculate recall
+        intersection = intersection.withColumn(
+            "recall", col("TP")/col("TPandFN"))
+        # Return mean recall across all userIds
+        return intersection.select("recall").agg({"recall": "avg"}).collect()[0][0]
 
     # def baseline_CUSTOM_ranking_metrics(self, preds, labels):
     #     """
@@ -418,7 +435,7 @@ class Model():
     #     """
     #     preds: dataFrame of predictions, do not collect list, each row has one userid and one movieid
     #     eval_data: validation or test set, same format as preds
-    #     returns: new rdd with intersection of both 
+    #     returns: new rdd with intersection of both
 
     #     """
     #     print("Running precision and recall")
