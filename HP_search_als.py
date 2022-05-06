@@ -56,10 +56,16 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('proj').getOrCreate()
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
-    maxIters = list(sys.argv[2])
-    ranks = list(sys.argv[3])
-    regParams = list(sys.argv[4])
+    maxIters_start = sys.argv[2]
+    maxIters_stop = sys.argv[3]
+    ranks_start = sys.argv[4]
+    ranks_stop = sys.argv[5]
+    regParams_start = int(sys.argv[6])
+    regParams_stop = int(sys.argv[7])
 
+    maxIters = np.arange(maxIters_start, maxIters_stop)
+    ranks = np.arange(ranks_start,ranks_stop)
+    regParams = np.logspace(regParams_start,regParams_stop)
 
     # Make sure input is valid
     if model_size not in ['small', 'large']:
