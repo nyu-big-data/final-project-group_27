@@ -27,7 +27,7 @@ def main(spark, model_size, maxIters, ranks, regParams):
             for regParam in regParams:
                 print(f"Running Model: {maxIter}, {rank}, {regParam}")
                 # Pass through dictionary of keyword arguments to Model()
-                reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = int(maxIter),regParam = int(regParam))
+                reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = int(maxIter),regParam = float(regParam))
                 # Run the model
                 reccomender_system.run_model(train, val)
 
