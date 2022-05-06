@@ -63,9 +63,9 @@ if __name__ == '__main__':
     regParams_start = int(sys.argv[6])
     regParams_stop = int(sys.argv[7])
 
-    maxIters = np.arange(maxIters_start, maxIters_stop)
-    ranks = np.arange(ranks_start,ranks_stop)
-    regParams = np.logspace(regParams_start,regParams_stop)
+    maxIters = np.linspace(maxIters_start, maxIters_stop, num=5)
+    ranks = np.linspace(ranks_start,ranks_stop, num=5)
+    regParams = np.logspace(regParams_start,regParams_stop, 5)
 
     # Make sure input is valid
     if model_size not in ['small', 'large']:
