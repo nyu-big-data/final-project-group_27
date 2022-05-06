@@ -20,14 +20,14 @@ def main(spark, model_size, maxIters, ranks, regParams):
                            schema=const.TRAIN_VAL_TEST_SCHEMA)
     val = spark.read.csv(val_file_path, header=True,
                          schema=const.TRAIN_VAL_TEST_SCHEMA)
-    
+
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
     for maxIter in maxIters:
         for rank in ranks:
             for regParam in regParams:
                 print(f"Running Model: {maxIter}, {rank}, {regParam}")
                 # Pass through dictionary of keyword arguments to Model()
-                reccomender_system = Model(model_size=model_size, model_type='als', rank=rank, maxIter = maxIter,regParam = regParam)
+                reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = int(maxIter),regParam = int(regParam))
                 # Run the model
                 reccomender_system.run_model(train, val)
 
@@ -56,9 +56,9 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('proj').getOrCreate()
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
-    maxIters = list(sys.argv[2])
-    ranks = list(sys.argv[3])
-    regParams = list(sys.argv[4])
+    maxIters = sys.argv[2]
+    ranks = sys.argv[3]
+    regParams = sys.argv[4]
 
 
     # Make sure input is valid
