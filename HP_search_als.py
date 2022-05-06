@@ -56,9 +56,9 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('proj').getOrCreate()
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
-    maxIters = sys.argv[2]
-    ranks = sys.argv[3]
-    regParams = sys.argv[4]
+    maxIters = list(sys.argv[2])
+    ranks = list(sys.argv[3])
+    regParams = list(sys.argv[4])
 
 
     # Make sure input is valid
