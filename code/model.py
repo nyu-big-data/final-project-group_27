@@ -228,8 +228,9 @@ class Model():
     def baseline_bias(self, training):
         temp = training.alias("temp")
         temp = temp.groupBy("movieId").agg(sum("rating").alias("sum"),(count("movieId")+self.bias).alias("count"))
-        top_100_movies = temp.withColumn("popularity",col("sum")/col("count")).orderBy("popularity", ascending=False).limit(100)
-        return top_100_movies.select("movieId")
+        top_100_movies = temp.withColumn("prediction",col("sum")/col("count"))
+        top_100_movies = top_100_movies.select("movieId","prediction").orderBy("prediction", ascending=False).limit(100)
+        return top_100_movies
         
 
     def baseline_min_ratings(self, training):
@@ -248,7 +249,7 @@ class Model():
         Calculates OTB Ranking Metrics, Custom Precision and Recall in place
         """
         self.OTB_ranking_metrics(
-            preds=predictions, labels=evaluation_data, k=self.k)
+            preds=predictions, labels=evaluation_data)
         self.custom_precision(predictions=predictions,
                               eval_data=evaluation_data)
         self.custom_recall(predictions=predictions, eval_data=evaluation_data)
@@ -332,7 +333,7 @@ class Model():
         self.metrics["weightedFMeasure"] = metrics.weightedFMeasure()
         
 
-    def OTB_ranking_metrics(self, preds, labels, k):
+    def OTB_ranking_metrics(self, preds, labels):
         """
         Input: 
         preds: DF - Tall DF of userId, movieId predictions
@@ -366,9 +367,9 @@ class Model():
 
         # Update Metrics
         self.metrics['MAP'] = rankingMetrics.meanAveragePrecision
-        self.metrics[f'precisionAt{self.k}'] = rankingMetrics.precisionAt(k)
-        self.metrics[f'recallAt{self.k}'] = rankingMetrics.recallAt(k)
-        self.metrics[f'ndgcAt{self.k}'] = rankingMetrics.ndcgAt(k)
+        self.metrics[f'precisionAt{self.num_recs}'] = rankingMetrics.precisionAt(self.num_recs)
+        self.metrics[f'recallAt{self.num_recs}'] = rankingMetrics.recallAt(self.num_recs)
+        self.metrics[f'ndgcAt{self.num_recs}'] = rankingMetrics.ndcgAt(self.num_recs)
 
     def custom_precision(self, predictions, eval_data) -> float:
         """
