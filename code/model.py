@@ -241,7 +241,7 @@ class Model():
         top_100_movies: PySpark DF - top 100 movies by popularity
         """
         temp = training.alias("temp")
-        temp = temp.groupBy("movieId").agg(sum("rating").alias("sum"),(count("movieId")+self.bias).alias("count"))
+        temp = temp.groupBy("movieId").agg(sum("rating").alias("sum"),(count("movieId")+int(self.bias)).alias("count"))
         top_100_movies = temp.withColumn("prediction",col("sum")/col("count"))
         top_100_movies = top_100_movies.select("movieId","prediction").orderBy("prediction", ascending=False).limit(100)
         return top_100_movies
@@ -298,7 +298,7 @@ class Model():
 
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
         self.OTB_ranking_metrics(
-            preds=ranking_predictions, labels=evaluation_data, k=self.k)
+            preds=ranking_predictions, labels=evaluation_data)
 
         # Calculate custom precision / recall
         self.custom_precision(
