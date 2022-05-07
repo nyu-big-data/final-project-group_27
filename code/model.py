@@ -63,7 +63,7 @@ class Model():
         # Top X number of reccomendations to return - set to 100, probably won't change
         self.num_recs = num_recs
         self.k = k
-        self.bias = int(bias)
+        self.bias = bias
         # Passed through by user
         self.model_size = model_size
         self.model_type = model_type
@@ -308,6 +308,10 @@ class Model():
 
         # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
         self.non_ranking_metrics(regression_predictions)
+        print("Test: Regression Preds")
+        regression_predictions.show()
+        print("Test: ranking_predictions")
+        ranking_predictions.show()
 
     def ALS_undo_normalization(self, means, preds):
         #Select User and Movie Means into Seperate DFs to join - drop duplicates is necessary
