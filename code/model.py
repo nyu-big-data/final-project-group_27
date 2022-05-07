@@ -54,7 +54,7 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 model_save=False, num_recs=100, min_ratings=0, positive_rating_threshold=0, k=100, sanity_check=None):
+                 num_recs=100, min_ratings=None, positive_rating_threshold=0, k=100, sanity_check=None):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         # Dictionary to access variable methods
@@ -142,7 +142,6 @@ class Model():
         Output: [userRecs, movieRecs] - list containing two lists, each of length == self.numrecs 
         -----
         """
-
         # Time the function start to finish
         start = time.time()
         # Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
@@ -161,30 +160,15 @@ class Model():
         regression_predictions = model.transform(evaluation_data)
         # Generate 100 Top Movies for All Users
         userRecs = model.recommendForAllUsers(self.num_recs)
-
-        # Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
-        ranking_predictions = userRecs.select(
-            "userId", explode("recommendations.movieId").alias("movieId"))
-
-        # Get format for custom/precision / recall
-        custom_predictions = userRecs.select("userId", explode(
-            "recommendations").alias("tuple")).select("userId", "tuple.*")
         end = time.time()
         self.time_to_predict = end - start
 
-        # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
-        self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
-            preds=ranking_predictions, labels=evaluation_data, k=self.k)
-
-        # Calculate precision / recall
-        self.metrics["Custom Precision"] = self.custom_precision(
-            predictions=custom_predictions, eval_data=evaluation_data)
-        self.metrics["Custom Recall"] = self.custom_recall(
-            predictions=custom_predictions, eval_data=evaluation_data)
-
-        # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
-        self.metrics['RMSE'], self.metrics['R2'], self.metrics['ROC'], = self.non_ranking_metrics(
-            regression_predictions)
+        # Get Movie / User Means from training DF
+        means = training.select("movieId", "userId",
+                                "movie_mean", "user_mean", "rating").alias("means")
+        # Calculate Metrics
+        self.ALS_metrics(means=means, userRecs=userRecs,
+                         regression_predictions=regression_predictions, evaluation_data=evaluation_data)
 
         # Return top self.num_recs movie recs for each user
         return userRecs
@@ -202,13 +186,17 @@ class Model():
         -----
         output: RDD of Top 100 movieIds by avg(rating)
         """
+        # Recommends in constant time
+        self.time_to_predict = 0
+
         # Make sure the right params have been passed to Model()
-        if self.min_ratings is None:
+        if self.min_ratings is None or self.min_ratings < 0:
             raise Exception(
-                "Must pass through a value for self.min_ratings for baseline to compute")
+                f"Must pass through a correct value for self.min_ratings for baseline to compute, you passed through {self.min_ratings}")
 
         # Time model Fit
         start = time.time()
+
         # Get Top 100 Most Popular Movies - Avg(rating) becomes prediction
         temp = training
         top_100_movies = temp.groupBy("movieId").agg(avg("rating").alias(
@@ -221,6 +209,7 @@ class Model():
         # Grab Distinct User Ids
         temp2 = evaluation_data
         ids = temp2.select("userId").distinct()
+
         # Cross Join Distinct userIds with Top 100 Most Popular Movies
         predictions = ids.crossJoin(top_100_movies)
 
@@ -233,17 +222,64 @@ class Model():
             tester = UnitTest()
             tester.baseline_prediction_check(preds=predictions)
 
-        # Time predictions as well
-        self.time_to_predict = 0  # Recommends in constant time
-        self.metrics['MAP'], self.metrics[f'precisionAt{self.k}'], self.metrics[f'recallAt{self.k}'], self.metrics[f'ndgcAt{self.k}'] = self.OTB_ranking_metrics(
-            preds=predictions, labels=evaluation_data, k=self.k)
+        # Calculate Metrics in place
+        self.Baseline_metrics(predictions=predictions,
+                              evaluation_data=evaluation_data)
 
-        self.metrics["Custom Precision"] = self.custom_precision(
-            predictions=predictions, eval_data=evaluation_data)
-        self.metrics["Custom Recall"] = self.custom_recall(
-            predictions=predictions, eval_data=evaluation_data)
         # Return The top 100 most popular movies above self.min_ratings threshold
         return predictions
+
+    def Baseline_metrics(self, predictions, evaluation_data):
+        """
+        Calculates OTB Ranking Metrics, Custom Precision and Recall in place
+        """
+        self.OTB_ranking_metrics(
+            preds=predictions, labels=evaluation_data, k=self.k)
+        self.custom_precision(predictions=predictions,
+                              eval_data=evaluation_data)
+        self.custom_recall(predictions=predictions, eval_data=evaluation_data)
+
+    def ALS_metrics(self, means, userRecs, regression_predictions, evaluation_data):
+        """
+        Calculates OTB Ranking Metrics, Custom Precision and Recall, and Non-Ranking Metrics in place
+        """
+        # Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
+
+        # Get format for custom/precision / recall
+        preds = userRecs.select("userId", explode(
+            "recommendations").alias("tuple")).select("userId", "tuple.*")
+
+        #Rename column for clarity
+        preds = preds.withColumnRenamed("rating", "prediction")
+
+        #Set join condition
+        cond = [(means.movieId == preds.movieId)
+                & (means.userId == preds.userId)]
+
+        #Rejoin user and movie means to un-normalize predictions
+        fixed_predictions = preds.join(means, cond, how='inner').\
+            select(means.userId, means.movieId, means.rating,
+                   means.movie_mean, means.user_mean, preds.prediction)
+
+        #Fix the predictions, un-normalize the predicted ratings score 
+        #Then subtract 2.5 to stay consistent with boolean logic in metric functions
+        fixed_predictions = fixed_predictions.withColumn("rating", col(
+            "rating") - 2.5 + (.5 * (col("movie_mean")+col("user_mean"))))
+        ranking_predictions = fixed_predictions.select(
+            "userId", "movieId", "prediction")
+
+        # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
+        self.OTB_ranking_metrics(
+            preds=ranking_predictions, labels=evaluation_data, k=self.k)
+
+        # Calculate precision / recall
+        self.custom_precision(
+            predictions=fixed_predictions, eval_data=evaluation_data)
+        self.custom_recall(predictions=fixed_predictions,
+                           eval_data=evaluation_data)
+
+        # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
+        self.non_ranking_metrics(regression_predictions)
 
     # Non-Ranking Metrics Calculated Here
     def non_ranking_metrics(self, predictions):
@@ -259,18 +295,21 @@ class Model():
         evaluator = RegressionEvaluator(
             labelCol="rating", predictionCol="prediction")
         # Calculate RMSE and r_2 metrics and append to metrics
-        rmse = evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
-        r2 = evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
+        self.metrics['RMSE'] = evaluator.evaluate(
+            predictions, {evaluator.metricName: "rmse"})
+        self.metrics['R2'] = evaluator.evaluate(
+            predictions, {evaluator.metricName: "r2"})
 
         ##ROC Metric Evaluation##
         # Make predictions Binary
         binary_predicts = predictions.withColumn("prediction", when(
-            predictions.rating > 0, 1).otherwise(0).cast("double"))
+            col("prediction") > 0, 1).otherwise(0).cast("double"))
+        binary_predicts = binary_predicts.withColumn("rating", when(
+            col("rating") > 0, 1).otherwise(0).cast("double"))
         evaluator = BinaryClassificationEvaluator(
             rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
         # Append ROC to our Metrics list
-        roc = evaluator.evaluate(binary_predicts)
-        return rmse, r2, roc
+        self.metrics['ROC'] = evaluator.evaluate(binary_predicts)
 
     def OTB_ranking_metrics(self, preds, labels, k):
         """
@@ -284,8 +323,10 @@ class Model():
         rankingMetrics.ndcgAt(k)
         """
         print("Running OTB Ranking Metrics")
+        windowSpec = Window.partitionBy('userId').orderBy(col('prediction').desc(),col("movieId"))
         predictions = preds \
-            .select('userId', 'movieId')\
+            .select('userId', 'movieId', 'prediction', rank().over(windowSpec).alias('rank')) \
+            .where(f'rank <= {self.num_recs}') \
             .groupBy('userId') \
             .agg(expr('collect_list(movieId) as movieId'))
 
@@ -299,7 +340,12 @@ class Model():
             .map(lambda row: (row[1], row[2]))
 
         rankingMetrics = RankingMetrics(predictionsAndLabels)
-        return rankingMetrics.meanAveragePrecision, rankingMetrics.precisionAt(k), rankingMetrics.recallAt(k), rankingMetrics.ndcgAt(k)
+
+        # Update Metrics
+        self.metrics['MAP'] = rankingMetrics.meanAveragePrecision
+        self.metrics[f'precisionAt{self.k}'] = rankingMetrics.precisionAt(k)
+        self.metrics[f'recallAt{self.k}'] = rankingMetrics.recallAt(k)
+        self.metrics[f'ndgcAt{self.k}'] = rankingMetrics.ndcgAt(k)
 
     def custom_precision(self, predictions, eval_data) -> float:
         """
@@ -319,11 +365,11 @@ class Model():
         """
         # Make our predictions equal to 1, as all movies are guessed as positive with baseline
         if self.model_type == 'baseline':
-            predictions = predictions.withColumn("prediction", lit(1))
+            predictions = predictions.withColumn("prediction", lit(1).cast("double"))
         else:
             # Otherwise if we're doing something like an ALS model then we just binarize
             predictions = predictions.withColumn("prediction", when(
-                predictions.rating > 0, 1).otherwise(0).cast("double"))
+                predictions.prediction > 0, 1).otherwise(0).cast("double"))
 
         # Set up join by aliasing and setting a join conidtion
         preds = predictions.alias("preds")
@@ -338,8 +384,10 @@ class Model():
         # Binarize rating to positive / negative reviews -- make double
         intersection = intersection.withColumn(
             "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
-        intersection = intersection.withColumn(
-            "prediction", col("prediction").cast("double"))
+
+        #Remove this potentially
+        # intersection = intersection.withColumn(
+        #     "prediction", col("prediction").cast("double"))
 
         # Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
         intersection = intersection.groupBy("userId").agg(
@@ -349,7 +397,8 @@ class Model():
         intersection = intersection.withColumn(
             "precision", col("TP")/col("TPandFP"))
         # Return mean accuracy across all userIds
-        return intersection.select("precision").agg({"precision": "avg"}).collect()[0][0]
+        self.metrics["Custom Precision"] = intersection.select(
+            "precision").agg({"precision": "avg"}).collect()[0][0]
 
     def custom_recall(self, predictions, eval_data) -> float:
         """
@@ -369,11 +418,11 @@ class Model():
         """
         # Make our predictions equal to 1, as all movies are guessed as positive with baseline
         if self.model_type == 'baseline':
-            predictions = predictions.withColumn("prediction", lit(1))
+            predictions = predictions.withColumn("prediction", lit(1).cast("double"))
         else:
             # Otherwise if we're doing something like an ALS model then we just binarize
             predictions = predictions.withColumn("prediction", when(
-                predictions.rating > 0, 1).otherwise(0).cast("double"))
+                predictions.prediction > 0, 1).otherwise(0).cast("double"))
         # Make all predictions 1 as all baseline predictions are positive
         predictions = predictions.withColumn("prediction", lit(1))
         # Set up Join
@@ -394,8 +443,9 @@ class Model():
         # Binarize rating to positive / negative reviews -- make double
         intersection = intersection.withColumn(
             "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
-        intersection = intersection.withColumn(
-            "prediction", col("prediction").cast("double"))
+     
+        # intersection = intersection.withColumn(
+        #     "prediction", col("prediction").cast("double"))
 
         # Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
         intersection = intersection.groupBy("userId").agg(
@@ -404,7 +454,7 @@ class Model():
         # Calculate recall
         intersection = intersection.withColumn(
             "recall", col("TP")/col("TPandFN"))
-        # Return mean recall across all userIds
-        return intersection.select("recall").agg({"recall": "avg"}).collect()[0][0]
 
-        
+        # Return mean recall across all userIds
+        self.metrics["Custom Recall"] = intersection.select(
+            "recall").agg({"recall": "avg"}).collect()[0][0]

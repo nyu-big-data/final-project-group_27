@@ -11,9 +11,10 @@ from code.unit_tests import UnitTest
 
 #A class used to preprocess data and to return train/val/test splits
 class DataPreprocessor():
-    def __init__(self, spark, file_path) -> None:
+    def __init__(self, spark, file_path, model_type) -> None:
         self.spark = spark                              #Spark Driver
         self.file_path = file_path                      #File Path to Read in Data
+        self.model_type = model_type
 
 
     #Main Method - Call this in partition_data.py to get train/val/test splits returned
@@ -34,7 +35,7 @@ class DataPreprocessor():
         #Format Date Time and Deduplicate Data
         clean_data = self.clean_data()                                                  #No args need to be passed, returns RDD of joined data (movies,ratings), without duplicates
         #Get Utility Matrix
-        train, val, test = self.create_train_val_test_splits(clean_data)                #Needs clean_data to run, returns train/val/test splits
+        train, val, test = self.create_splits(clean_data)                               #Needs clean_data to run, returns train/val/test splits
         
         #Check if we should perform sanity check
         if sanity_checker:
@@ -109,16 +110,9 @@ class DataPreprocessor():
         #Reorder Columns so union works
         cleaned_dupes = cleaned_dupes.select('rating', 'userId', 'movieId', 'date', 'title')
 
-        
         #Get the union of the non_dupes and cleaned_dupes
         clean_data = non_dupes.union(cleaned_dupes)
-
-        #Subtract 2.5 from each review to create negative reviews
-        clean_data = clean_data.withColumn("rating",col("rating")-2.5)
         
-        #For testing purposes should be 100,830 for small dataset
-        #print(f"The length of the combined and de-deduped joined data-set is: {len(clean_data.collect())}")
-
         #Repartition for efficiency:
         clean_data = clean_data.repartition(30)
 
@@ -126,7 +120,7 @@ class DataPreprocessor():
         return clean_data
 
     #Create Train Test Val Splits - .preprocess() calls this function
-    def create_train_val_test_splits(self, clean_data):
+    def create_splits(self, clean_data):
         """
         Procedure: 
         Create two columns - the first will measure the specific row count for a specific user
@@ -153,8 +147,11 @@ class DataPreprocessor():
         #Drop Any Nan rows
         ratings = clean_data
         ratings = ratings.na.drop("any")
-    
 
+        #Subtract 2.5 from each review to create negative reviews if doing baseline (Screws up ALS normalization if we do it regardless of model type)
+        if self.model_type == 'baseline':
+            ratings = ratings.withColumn("rating",col("rating")-2.5)
+            
         #Coalesce data frame into one partition so window functions are accurate
         ratings = ratings.coalesce(1)
         row_number_window = Window.partitionBy("userId").orderBy("date","movieId")
@@ -182,3 +179,29 @@ class DataPreprocessor():
         test = test.repartition(30)
         #Return train/val/test splits
         return training, val, test
+
+    def als_normalize_ratings(self,train):
+        """
+        Preprocess normalization method for ALS model implementation. 
+        Calculates the mean ratings for each movie and for each user, then subtracts from a rating m(i,j)
+        one half of the sum of the average rating for user i and the average rating of movie j
+        Ratings after normalization for movie m(i,j) i-> user, j-> movie:
+        rating = (rating) - .5 * ( avg(rating for user i) + avg(rating for movie j) )
+        Input:
+        train: PySpark DF of training data
+        Output:
+        train: PySpark DF with preprocessed rating
+        movieAndUserMeans: PySpark DF with movieId,userId,movie_mean,user_mean to be added back to predictions
+        """
+        #Create window specs - average over userId and average over movieId
+        windowSpecUserAgg  = Window.partitionBy("userId")
+        windowSpecMovieAgg  = Window.partitionBy("movieId")
+
+        #Add agg columns
+        train = train.withColumn("movie_mean",avg(col("rating")).over(windowSpecMovieAgg)).\
+                    withColumn("user_mean",avg(col("rating")).over(windowSpecUserAgg))
+
+        #Adjust each rating accordingly by subtracting one half of the sum of user_mean and movie_mean
+        train = train.withColumn("rating",col("rating")-(.5 * ( col("user_mean")+col("movie_mean") )))
+
+        return train

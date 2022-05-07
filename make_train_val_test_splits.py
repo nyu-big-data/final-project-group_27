@@ -1,10 +1,11 @@
 #Import a bunch of things
+from xml.parsers.expat import model
 from code.preprocess import DataPreprocessor
 import code.constants as const
 import sys
 from pyspark.sql import SparkSession
 
-def main(spark, dataset_size):
+def main(spark, dataset_size, model_type):
     """
     This program should be ran from the command line with an argument of what dataset to run on.
     dataset_size arg is either 'small' or 'large. The files you have stored in hdfs must be
@@ -16,19 +17,23 @@ def main(spark, dataset_size):
     filepath = const.HPC_DATA_FILEPATH + dataset_size + "-"
     
     #Initialize DataPreprocessor Object
-    data = DataPreprocessor(spark,filepath)
+    data = DataPreprocessor(spark = spark, file_path=filepath, model_type=model_type)
                
     print(f"Splitting Train/Val/Test for {filepath}")
     #Call train/test/val splits - Returns train, val, test data splits
     train, val, test = data.preprocess(sanity_checker=True)
 
+    #Add ALS Rating Normalization Preprocess if necessary
+    if model_type == 'als':
+        train = data.als_normalize_ratings(train)
+
     #Output Train/Test/Val Splits into Data_partitions
     print(f"Saving train/val/test splits to {const.HPC_DATA_FILEPATH}")
-    train.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}-train.csv")
-    val.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}-val.csv")
-    test.write.csv(f"{const.HPC_DATA_FILEPATH}{dataset_size}-test.csv")
+    train.write.csv(f"{const.HPC_DATA_FILEPATH}{model_type}-{dataset_size}-train.csv",mode="overwrite")
+    val.write.csv(f"{const.HPC_DATA_FILEPATH}-{dataset_size}-val.csv",mode="overwrite")
+    test.write.csv(f"{const.HPC_DATA_FILEPATH}-{dataset_size}-test.csv",mode="overwrite")
 
-    #test.write.format("csv").mode("overwrite").options(header="true",sep="'").save(path=self.output_file_path)
+    
 
     #Let us know when done
     print("Finished Saving")
@@ -39,8 +44,11 @@ if __name__ == "__main__":
     spark = SparkSession.builder.appName('Proj').getOrCreate()
     #Either 'small' or 'large' should be passed through -> sys.argv[1]
     dataset_size = sys.argv[1]
+    model_type = sys.argv[2]
     if dataset_size not in ['small','large']:
-        raise Exception("Terminating, you must enter 'small' or 'large'")
-    else:
-        main(spark, dataset_size) 
+        raise Exception(f"Terminating, you must enter 'small' or 'large', you entered {dataset_size}")
+    if dataset_size not in ['als','baseline']:
+        raise Exception(f"Terminating, you must enter 'als' or 'baseline' you entered {model_type}")
+
+    main(spark, dataset_size, model_type) 
    

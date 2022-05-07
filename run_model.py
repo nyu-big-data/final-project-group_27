@@ -8,13 +8,14 @@ import json
 
 
 def main(spark, model_size, model_type, model_args):
-
+    #Dummy variable
+    means = None
     print(f"Filepath: {const.HPC_DATA_FILEPATH}{model_size}")
     # Grab the filepaths for model_size
-    train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
+    train_file_path = f"{const.HPC_DATA_FILEPATH}{model_type}-{model_size}-train.csv" #Depends on what model we want - ALS includes more preprocessing
     test_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-test.csv"
     val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
-
+    
     # Read data for file paths
     train = spark.read.csv(train_file_path,
                            schema=const.TRAIN_VAL_TEST_SCHEMA)
