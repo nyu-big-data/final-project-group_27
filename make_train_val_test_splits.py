@@ -34,9 +34,9 @@ def main(spark, dataset_size, model_type):
     train.write.csv(
         f"{const.HPC_DATA_FILEPATH}{model_type}-{dataset_size}-train.csv", mode="overwrite")
     val.write.csv(
-        f"{const.HPC_DATA_FILEPATH}-{dataset_size}-val.csv", mode="overwrite")
+        f"{const.HPC_DATA_FILEPATH}{dataset_size}-val.csv", mode="overwrite")
     test.write.csv(
-        f"{const.HPC_DATA_FILEPATH}-{dataset_size}-test.csv", mode="overwrite")
+        f"{const.HPC_DATA_FILEPATH}{dataset_size}-test.csv", mode="overwrite")
 
     # Let us know when done
     print("Finished Saving")

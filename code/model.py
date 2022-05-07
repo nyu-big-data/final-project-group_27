@@ -290,12 +290,7 @@ class Model():
     # Non-Ranking Metrics Calculated Here
     def non_ranking_metrics(self, predictions):
         """
-        Input: 
-        predictions
-        Output:
-        rmse: evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
-        r2: evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
-        roc: evaluator.evaluate(binary_predicts)
+        Takes in a predictions rdd as input, saves rmse, r2, weighted recall, precision and F1 to self.metrics
         """
         ##Evaluate Predictions for Regression Task##
         evaluator = RegressionEvaluator(
