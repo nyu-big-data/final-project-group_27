@@ -292,6 +292,24 @@ class Model():
         #Rename column for clarity
         preds = preds.withColumnRenamed("rating", "prediction")
 
+        #Undo the normalization for both ranking predictions and regression predictions
+        ranking_predictions = self.ALS_undo_normalization(means, preds).select("movieId","userId","prediction")
+        regression_predictions = self.ALS_undo_normalization(means, regression_predictions).select("rating","movieId","userId","prediction")
+
+        # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
+        self.OTB_ranking_metrics(
+            preds=ranking_predictions, labels=evaluation_data, k=self.k)
+
+        # Calculate custom precision / recall
+        self.custom_precision(
+            predictions=ranking_predictions, eval_data=evaluation_data)
+        self.custom_recall(predictions=ranking_predictions,
+                           eval_data=evaluation_data)
+
+        # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
+        self.non_ranking_metrics(regression_predictions)
+
+    def ALS_undo_normalization(self, means, preds):
         #Select User and Movie Means into Seperate DFs to join - drop duplicates is necessary
         user_means = means.select("userId","user_mean").alias("user_means")
         user_means = user_means.dropDuplicates()
@@ -299,8 +317,8 @@ class Model():
         movie_means = movie_means.dropDuplicates()
 
         #Join user_means first, then movie_means
-        preds = preds.join(user_means, "userId",how='left').select(preds.userId, preds.movieId, preds.prediction,user_means.user_mean)
-        preds = preds.join(movie_means, "movieId",how='left').select(preds.userId, preds.movieId, preds.prediction,preds.user_mean,movie_means.movie_mean)
+        preds = preds.join(user_means, "userId",how='left').select(preds['*'],user_means.user_mean)
+        preds = preds.join(movie_means, "movieId",how='left').select(preds['*'],movie_means.movie_mean)
 
         #For those that don't appear in the predicted movies just have 0
         preds = preds.withColumn("user_mean", when(
@@ -312,21 +330,8 @@ class Model():
         #Then subtract 2.5 to stay consistent with boolean logic in metric functions
         fixed_predictions = preds.withColumn("prediction", col(
             "prediction") - 2.5 + (.5 * (col("movie_mean")+col("user_mean"))))
-        ranking_predictions = fixed_predictions.select(
-            "userId", "movieId", "prediction")
 
-        # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
-        self.OTB_ranking_metrics(
-            preds=ranking_predictions, labels=evaluation_data, k=self.k)
-
-        # Calculate precision / recall
-        self.custom_precision(
-            predictions=fixed_predictions, eval_data=evaluation_data)
-        self.custom_recall(predictions=fixed_predictions,
-                           eval_data=evaluation_data)
-
-        # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
-        self.non_ranking_metrics(regression_predictions)
+        return fixed_predictions
 
     # Non-Ranking Metrics Calculated Here
     def non_ranking_metrics(self, predictions):
