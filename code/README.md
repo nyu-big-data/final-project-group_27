@@ -59,6 +59,8 @@ This python script will hold a class, `DataPreprocessor` that will have the resp
 
 > yarn logs -applicationId application_1648648882306_28175 -log_files stdout
 
+Some test 
+
 ## Spark
 
 - Submit Job
