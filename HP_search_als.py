@@ -12,7 +12,7 @@ import numpy as np
 def main(spark, model_size, maxIters, ranks, regParams):
 
     # Grab the filepaths for model_size
-    train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
+    train_file_path = f"{const.HPC_DATA_FILEPATH}als-{model_size}-train.csv"
     val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
 
     # Read data for file paths
