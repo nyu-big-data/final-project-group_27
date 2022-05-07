@@ -19,7 +19,6 @@ For example:
 For Example:
 
 > spark-submit --conf spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true run_model.py small als '{"rank":5, "maxIter":5,"regParam":0.05}'
-
 > spark-submit --conf spark.dynamicAllocation.enabled=true --conf spark.shuffle.service.enabled=false --conf spark.dynamicAllocation.shuffleTracking.enabled=true run_model.py large baseline '{"bias":100}'
 
 Make sure the param dict is in single quotes.
@@ -76,6 +75,6 @@ To execute run_model.py with ALS model: enter the following:
 
 `run_model.py small als '{"rank":5,"maxIter":10,"regParam":0.1}'`
 
-`run_model.py small baseline '{"min_ratings":10}'`
+`run_model.py small baseline '{"min_ratings":10}'` or `run_model.py small baseline '{"bias":10}'`
 
 Optional parameter -> `positive_rating_threshold: 'int'` used in custom ranking metrics

@@ -17,9 +17,9 @@ def main(spark, model_size, maxIters, ranks, regParams):
 
     # Read data for file paths
     train = spark.read.csv(train_file_path, header=True,
-                           schema=const.TRAIN_VAL_TEST_SCHEMA)
+                           schema=const.ALS_TRAIN_SCHEMA)
     val = spark.read.csv(val_file_path, header=True,
-                         schema=const.TRAIN_VAL_TEST_SCHEMA)
+                         schema=const.VAL_TEST_SCHEMA)
 
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
     for maxIter in maxIters:
