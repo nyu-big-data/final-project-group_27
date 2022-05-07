@@ -111,11 +111,7 @@ class Model():
         elif test:
             self.evaluation_data_name = "Test"
             evaluation_data = test
-        print("Test: Train Show")
-        train.show()
-        print("test: eval data show")
-        evaluation_data.show()
-        
+
         # Check for leakage between the sets
         if self.sanity_check:
             tester = UnitTest()
@@ -299,11 +295,6 @@ class Model():
         #Undo the normalization for both ranking predictions and regression predictions
         ranking_predictions = self.ALS_undo_normalization(means, preds).select("movieId","userId","prediction")
         regression_predictions = self.ALS_undo_normalization(means, regression_predictions).select("rating","movieId","userId","prediction")
-
-        print("Test: Regression Preds")
-        regression_predictions.show()
-        print("Test: ranking_predictions")
-        ranking_predictions.show()
 
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
         self.OTB_ranking_metrics(
