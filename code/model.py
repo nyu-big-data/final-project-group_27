@@ -111,7 +111,11 @@ class Model():
         elif test:
             self.evaluation_data_name = "Test"
             evaluation_data = test
-
+        print("Test: Train Show")
+        train.show()
+        print("test: eval data show")
+        evaluation_data.show()
+        
         # Check for leakage between the sets
         if self.sanity_check:
             tester = UnitTest()
