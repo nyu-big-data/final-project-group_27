@@ -390,7 +390,7 @@ class Model():
             .groupBy('userId') \
             .agg(expr('collect_list(movieId) as movieId'))
 
-        predictionsAndLabels = predictions.join(broadcast(labels), 'userId', 'inner') \
+        predictionsAndLabels = predictions.join(labels, 'userId', 'inner') \
             .rdd \
             .map(lambda row: (row[1], row[2]))
 
