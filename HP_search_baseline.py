@@ -9,24 +9,24 @@ import numpy as np
 # Main Function that will define model behavior
 
 
-def main(spark, model_size, start, end,step=1):
+def main(spark, model_size, start=0, end=10,step=1):
 
     # Grab the filepaths for model_size
-    train_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-train.csv"
+    train_file_path = f"{const.HPC_DATA_FILEPATH}baseline-{model_size}-train.csv"
     val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
 
     # Read data for file paths
     train = spark.read.csv(train_file_path, header=True,
-                           schema=const.TRAIN_VAL_TEST_SCHEMA)
+                           schema=const.VAL_TEST_SCHEMA)
     val = spark.read.csv(val_file_path, header=True,
-                         schema=const.TRAIN_VAL_TEST_SCHEMA)
+                         schema=const.VAL_TEST_SCHEMA)
 
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
     for i in range(start,end+step,step):
         # Pass through dictionary of keyword arguments to Model()
 
         print("Running model")
-        reccomender_system = Model(model_size=model_size, model_type='baseline', min_ratings=i)
+        reccomender_system = Model(model_size=model_size, model_type='baseline', bias=i)
         # Run the model
         reccomender_system.run_model(train, val)
 

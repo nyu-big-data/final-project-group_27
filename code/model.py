@@ -53,7 +53,7 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 num_recs=100, min_ratings=None, positive_rating_threshold=0, k=100, sanity_check=None):
+                 num_recs=100, min_ratings=None, bias = None, positive_rating_threshold=0, k=100, sanity_check=None):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         # Dictionary to access variable methods
@@ -63,6 +63,7 @@ class Model():
         # Top X number of reccomendations to return - set to 100, probably won't change
         self.num_recs = num_recs
         self.k = k
+        self.bias = int(bias)
         # Passed through by user
         self.model_size = model_size
         self.model_type = model_type
@@ -189,21 +190,17 @@ class Model():
         self.time_to_predict = 0
 
         # Make sure the right params have been passed to Model()
-        if self.min_ratings is None or self.min_ratings < 0:
+        if self.min_ratings is None and self.bias is None:
             raise Exception(
-                f"Must pass through a correct value for self.min_ratings for baseline to compute, you passed through {self.min_ratings}")
+                f"Must pass through a value for self.min_ratings or self.bias for baseline to compute, you passed through {self.min_ratings}")
 
         # Time model Fit
         start = time.time()
 
-        # Get Top 100 Most Popular Movies - Avg(rating) becomes prediction
-        temp = training
-        top_100_movies = temp.groupBy("movieId").agg(avg("rating").alias(
-            "prediction"), count("movieId").alias("movie_count"))
-        top_100_movies = top_100_movies.where(
-            col("movie_count") >= self.min_ratings)
-        top_100_movies = top_100_movies.select("movieId").orderBy(
-            "prediction", ascending=False).limit(100)
+        if self.min_ratings:
+            top_100_movies = self.baseline_min_ratings(training)
+        else:
+            top_100_movies = self.baseline_bias(training)
 
         # Grab Distinct User Ids
         temp2 = evaluation_data
@@ -227,6 +224,24 @@ class Model():
 
         # Return The top 100 most popular movies above self.min_ratings threshold
         return predictions
+
+    def baseline_bias(self, training):
+        temp = training.alias("temp")
+        temp = temp.groupBy("movieId").agg(sum("rating").alias("sum"),(count("movieId")+self.bias).alias("count"))
+        top_100_movies = temp.withColumn("popularity",col("sum")/col("count")).orderBy("popularity", ascending=False).limit(100)
+        return top_100_movies.select("movieId")
+        
+
+    def baseline_min_ratings(self, training):
+        # Get Top 100 Most Popular Movies - Avg(rating) becomes prediction
+        temp = training.alias("temp")
+        top_100_movies = temp.groupBy("movieId").agg(avg("rating").alias(
+            "prediction"), count("movieId").alias("movie_count"))
+        top_100_movies = top_100_movies.where(
+            col("movie_count") >= self.min_ratings)
+        top_100_movies = top_100_movies.select("movieId").orderBy(
+            "prediction", ascending=False).limit(100)
+        return top_100_movies
 
     def Baseline_metrics(self, predictions, evaluation_data):
         """
