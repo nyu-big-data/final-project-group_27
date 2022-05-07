@@ -320,7 +320,7 @@ class Model():
         self.metrics["weightedRecall"] = metrics.weightedRecall
         self.metrics["weightedPrecision"] = metrics.weightedPrecision
         self.metrics["weightedFMeasure"] = metrics.weightedFMeasure()
-        self.metrics["weightedFalsePositiveRate"] = metrics.weightedFalsePositiveRate
+        
 
     def OTB_ranking_metrics(self, preds, labels, k):
         """
