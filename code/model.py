@@ -296,6 +296,11 @@ class Model():
         ranking_predictions = self.ALS_undo_normalization(means, preds).select("movieId","userId","prediction")
         regression_predictions = self.ALS_undo_normalization(means, regression_predictions).select("rating","movieId","userId","prediction")
 
+        print("Test: Regression Preds")
+        regression_predictions.show()
+        print("Test: ranking_predictions")
+        ranking_predictions.show()
+
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
         self.OTB_ranking_metrics(
             preds=ranking_predictions, labels=evaluation_data)
@@ -308,10 +313,7 @@ class Model():
 
         # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
         self.non_ranking_metrics(regression_predictions)
-        print("Test: Regression Preds")
-        regression_predictions.show()
-        print("Test: ranking_predictions")
-        ranking_predictions.show()
+        
 
     def ALS_undo_normalization(self, means, preds):
         #Select User and Movie Means into Seperate DFs to join - drop duplicates is necessary
