@@ -7,9 +7,8 @@ from pyspark.ml.recommendation import ALS
 from pyspark.mllib.evaluation import RankingMetrics
 import time
 from datetime import datetime
-from pyspark.mllib.evaluation import RankingMetrics
+from pyspark.mllib.evaluation import RankingMetrics, MulticlassMetrics
 from pyspark.sql import Row
-from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.sql.functions import *
 from pyspark.sql.window import Window
 import code.constants as const
@@ -252,19 +251,26 @@ class Model():
         #Rename column for clarity
         preds = preds.withColumnRenamed("rating", "prediction")
 
-        #Set join condition
-        cond = [(means.movieId == preds.movieId)
-                & (means.userId == preds.userId)]
+        #Select User and Movie Means into Seperate DFs to join - drop duplicates is necessary
+        user_means = means.select("userId","user_mean").alias("user_means")
+        user_means = user_means.dropDuplicates()
+        movie_means = means.select("movieId","movie_mean").alias("movie_means")
+        movie_means = movie_means.dropDuplicates()
 
-        #Rejoin user and movie means to un-normalize predictions
-        fixed_predictions = preds.join(means, cond, how='inner').\
-            select(means.userId, means.movieId, means.rating,
-                   means.movie_mean, means.user_mean, preds.prediction)
+        #Join user_means first, then movie_means
+        preds = preds.join(user_means, "userId",how='left').select(preds.userId, preds.movieId, preds.prediction,user_means.user_mean)
+        preds = preds.join(movie_means, "movieId",how='left').select(preds.userId, preds.movieId, preds.prediction,preds.user_mean,movie_means.movie_mean)
+
+        #For those that don't appear in the predicted movies just have 0
+        preds = preds.withColumn("user_mean", when(
+                    col("user_mean").isNull(), 0).otherwise(col("user_mean")))
+        preds = preds.withColumn("movie_mean", when(
+                    col("movie_mean").isNull(), 0).otherwise(col("movie_mean")))
 
         #Fix the predictions, un-normalize the predicted ratings score 
         #Then subtract 2.5 to stay consistent with boolean logic in metric functions
-        fixed_predictions = fixed_predictions.withColumn("rating", col(
-            "rating") - 2.5 + (.5 * (col("movie_mean")+col("user_mean"))))
+        fixed_predictions = preds.withColumn("prediction", col(
+            "prediction") - 2.5 + (.5 * (col("movie_mean")+col("user_mean"))))
         ranking_predictions = fixed_predictions.select(
             "userId", "movieId", "prediction")
 
@@ -300,16 +306,21 @@ class Model():
         self.metrics['R2'] = evaluator.evaluate(
             predictions, {evaluator.metricName: "r2"})
 
-        ##ROC Metric Evaluation##
+        ##Multi-Class Metric Evaluation##
         # Make predictions Binary
         binary_predicts = predictions.withColumn("prediction", when(
             col("prediction") > 0, 1).otherwise(0).cast("double"))
         binary_predicts = binary_predicts.withColumn("rating", when(
             col("rating") > 0, 1).otherwise(0).cast("double"))
-        evaluator = BinaryClassificationEvaluator(
-            rawPredictionCol='prediction', labelCol='rating', metricName='areaUnderROC')
-        # Append ROC to our Metrics list
-        self.metrics['ROC'] = evaluator.evaluate(binary_predicts)
+
+        predictionAndLabels = binary_predicts.select("prediction","rating").rdd
+        metrics = MulticlassMetrics(predictionAndLabels)
+
+        #Calculate weighted Precision, Recall, F1, and FP rate
+        self.metrics["weightedRecall"] = metrics.weightedRecall
+        self.metrics["weightedPrecision"] = metrics.weightedPrecision
+        self.metrics["weightedFMeasure"] = metrics.weightedFMeasure()
+        self.metrics["weightedFalsePositiveRate"] = metrics.weightedFalsePositiveRate
 
     def OTB_ranking_metrics(self, preds, labels, k):
         """
@@ -323,6 +334,8 @@ class Model():
         rankingMetrics.ndcgAt(k)
         """
         print("Running OTB Ranking Metrics")
+
+        #Define window spec to grab top 100 reviews - use movieId as tie breaker (especially for baseline)
         windowSpec = Window.partitionBy('userId').orderBy(col('prediction').desc(),col("movieId"))
         predictions = preds \
             .select('userId', 'movieId', 'prediction', rank().over(windowSpec).alias('rank')) \
@@ -385,10 +398,6 @@ class Model():
         intersection = intersection.withColumn(
             "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
 
-        #Remove this potentially
-        # intersection = intersection.withColumn(
-        #     "prediction", col("prediction").cast("double"))
-
         # Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
         intersection = intersection.groupBy("userId").agg(
             sum(col("rating")).alias("TP"), sum(col("prediction")).alias("TPandFP"))
@@ -423,8 +432,7 @@ class Model():
             # Otherwise if we're doing something like an ALS model then we just binarize
             predictions = predictions.withColumn("prediction", when(
                 predictions.prediction > 0, 1).otherwise(0).cast("double"))
-        # Make all predictions 1 as all baseline predictions are positive
-        predictions = predictions.withColumn("prediction", lit(1))
+        
         # Set up Join
         preds = predictions.alias("preds")
         labels = eval_data.alias("labels")
@@ -444,9 +452,6 @@ class Model():
         intersection = intersection.withColumn(
             "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
      
-        # intersection = intersection.withColumn(
-        #     "prediction", col("prediction").cast("double"))
-
         # Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
         intersection = intersection.groupBy("userId").agg(
             sum(col("rating")).alias("TPandFN"), sum(col("prediction")).alias("TP"))
