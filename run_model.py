@@ -17,12 +17,16 @@ def main(spark, model_size, model_type, model_args):
     val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
     
     # Read data for file paths
-    train = spark.read.csv(train_file_path,
-                           schema=const.TRAIN_VAL_TEST_SCHEMA)
+    if model_type == 'als':
+        train = spark.read.csv(train_file_path,
+                            schema=const.ALS_TRAIN_SCHEMA)
+    else:
+        train = spark.read.csv(train_file_path,
+                          schema=const.VAL_TEST_SCHEMA)
     test = spark.read.csv(test_file_path,
-                          schema=const.TRAIN_VAL_TEST_SCHEMA)
+                          schema=const.VAL_TEST_SCHEMA)
     val = spark.read.csv(val_file_path,
-                         schema=const.TRAIN_VAL_TEST_SCHEMA)
+                         schema=const.VAL_TEST_SCHEMA)
 
     # Pass through dictionary of keyword arguments to Model()
     reccomender_system = Model(model_size=model_size, model_type=model_type, **model_args)
