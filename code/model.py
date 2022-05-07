@@ -131,7 +131,8 @@ class Model():
     # This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def alternatingLeastSquares(self, training, evaluation_data):
         """
-        Builds and fits a PySpark alternatingLeastSquares latent factor model. Calls self.record_metrics(precitions,labels)
+        Builds and fits a PySpark alternatingLeastSquares latent factor model. 
+        Calls self.ALS_metrics(means, userRecs, regression_precitions,evaluation_data)
         to record the results. Some dummy variables are made to record whether or not we are using the validation set
         or the testing set. This will help us record our results accurately. Training and predicting are also timed. 
         -----
@@ -139,7 +140,8 @@ class Model():
         training: RDD - Training data set
         evaluation_data: RDD - Either Validation data set, or Training data set
         -----
-        Output: [userRecs, movieRecs] - list containing two lists, each of length == self.numrecs 
+        Output: 
+        userRecs: PySpark DF -  containing (userId, [movie_rec_1,...,movie_rec_n]) where n = self.num_recs
         -----
         """
         # Time the function start to finish
@@ -176,13 +178,14 @@ class Model():
     # Baseline model that returns top X most popular items (highest avg rating)
     def baseline(self, training, evaluation_data):
         """
-        Baseline model for recommendation system. No personalization, just recommend the Top 100 movies by avg(rating)
-        A movie must have at least self.min_ratings to be considered
+        Baseline model for recommendation system. No personalization, just recommend the Top 100 movies by popularity.
+        Popularity is calculated by taking avg(rating) for each movieId. Popularity has one of the two parameters, depending
+        on which you pass to the model: self.min_ratings or self.bias. See self.baseline_min_ratings and self.baseline_bias
+        for more details.
         input:
         -----
         training: RDD - training set data
         evaluation_data: RDD - Validation set or Test set data
-        self.min_ratings: int - how many ratings a movie must have in order to be considered in top 100
         -----
         output: RDD of Top 100 movieIds by avg(rating)
         """
@@ -226,6 +229,17 @@ class Model():
         return predictions
 
     def baseline_bias(self, training):
+        """
+        Defines top 100 most popular movies by adding in a bias term to the denominator.
+        Popularity = sum(ratings) / (count(ratings) + self.bias)
+        
+        input: 
+        -----
+        training: PySpark DF - training data set
+        -----
+        output:
+        top_100_movies: PySpark DF - top 100 movies by popularity
+        """
         temp = training.alias("temp")
         temp = temp.groupBy("movieId").agg(sum("rating").alias("sum"),(count("movieId")+self.bias).alias("count"))
         top_100_movies = temp.withColumn("prediction",col("sum")/col("count"))
@@ -234,6 +248,17 @@ class Model():
         
 
     def baseline_min_ratings(self, training):
+        """
+        Defines top 100 most popular movies by enforcing a minimum amount of ratings for each movie.
+        Popularity = avg(rating) where count(movie) >= self.min_reviews
+
+        input: 
+        -----
+        training: PySpark DF - training data set
+        -----
+        output:
+        top_100_movies: PySpark DF - top 100 movies by popularity
+        """
         # Get Top 100 Most Popular Movies - Avg(rating) becomes prediction
         temp = training.alias("temp")
         top_100_movies = temp.groupBy("movieId").agg(avg("rating").alias(
@@ -335,14 +360,11 @@ class Model():
 
     def OTB_ranking_metrics(self, preds, labels):
         """
+        Calculates MAP, Precistion at K, Recall at K, NDGC at K in place and saves outputs
+        to self.metrics["metric_name"]
         Input: 
         preds: DF - Tall DF of userId, movieId predictions
-        labels: DF - 
-        k: int - used in precisionAt(k), ndgcAt(k)
-        Output:
-        rankingMetrics.meanAveragePrecision
-        rankingMetrics.recallAt(k)
-        rankingMetrics.ndcgAt(k)
+        labels: DF - Validation or Testing Data Split
         """
         print("Running OTB Ranking Metrics")
 
@@ -371,9 +393,9 @@ class Model():
         self.metrics[f'recallAt{self.num_recs}'] = rankingMetrics.recallAt(self.num_recs)
         self.metrics[f'ndgcAt{self.num_recs}'] = rankingMetrics.ndcgAt(self.num_recs)
 
-    def custom_precision(self, predictions, eval_data) -> float:
+    def custom_precision(self, predictions, eval_data) -> None:
         """
-        Function to calculate accuracy -> TP / (TP + FP)
+        Function to calculate accuracy -> TP / (TP + FP), saved in place
         True positives are movies we predicted they would like and they appeared in their evaluation set
         and the user rated them positive. False Positives are movies that we predicted they liked, and they
         watched them in their evaluation set, but did not rate them positively.
@@ -420,9 +442,10 @@ class Model():
         self.metrics["Custom Precision"] = intersection.select(
             "precision").agg({"precision": "avg"}).collect()[0][0]
 
-    def custom_recall(self, predictions, eval_data) -> float:
+    def custom_recall(self, predictions, eval_data) -> None:
         """
-        Custom function to calculate model recall. True Positives (TP) are movies that we predicted the user would like
+        Custom function to calculate model recall  (TP / TP + FN) in place. 
+        True Positives (TP) are movies that we predicted the user would like
         and they actually watched and liked it. False Negatives (FN) are movies we did not recommend
         in the case of the baseline, or movies we predicted they would not like (for ALS) that the user ended up
         watching in their evaluation set and rated positively.
@@ -431,10 +454,6 @@ class Model():
         -----
         predictions: PySpark DF of movie predictions for baseline model
         eval_data: PySpark DF of evaluation data
-        -----
-        output:
-        -----
-        float: recall caculated as Recall: TP / TP + FN
         """
         # Make our predictions equal to 1, as all movies are guessed as positive with baseline
         if self.model_type == 'baseline':
