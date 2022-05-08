@@ -53,7 +53,7 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 num_recs=100, min_ratings=None, bias = None, positive_rating_threshold=0, k=100, sanity_check=None):
+                 num_recs=100, min_ratings=None, bias=None, positive_rating_threshold=0, k=100, sanity_check=None):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         # Dictionary to access variable methods
@@ -115,7 +115,6 @@ class Model():
         train.show()
         print("Eval Data")
         evaluation_data.show()
-
 
         # Check for leakage between the sets
         if self.sanity_check:
@@ -237,7 +236,7 @@ class Model():
         """
         Defines top 100 most popular movies by adding in a bias term to the denominator.
         Popularity = sum(ratings) / (count(ratings) + self.bias)
-        
+
         input: 
         -----
         training: PySpark DF - training data set
@@ -246,11 +245,12 @@ class Model():
         top_100_movies: PySpark DF - top 100 movies by popularity
         """
         temp = training.alias("temp")
-        temp = temp.groupBy("movieId").agg(sum("rating").alias("sum"),(count("movieId")+int(self.bias)).alias("count"))
-        top_100_movies = temp.withColumn("prediction",col("sum")/col("count"))
-        top_100_movies = top_100_movies.select("movieId","prediction").orderBy("prediction", ascending=False).limit(100)
+        temp = temp.groupBy("movieId").agg(sum("rating").alias(
+            "sum"), (count("movieId")+int(self.bias)).alias("count"))
+        top_100_movies = temp.withColumn("prediction", col("sum")/col("count"))
+        top_100_movies = top_100_movies.select("movieId", "prediction").orderBy(
+            "prediction", ascending=False).limit(100)
         return top_100_movies
-        
 
     def baseline_min_ratings(self, training):
         """
@@ -284,22 +284,39 @@ class Model():
                               eval_data=evaluation_data)
         self.custom_recall(predictions=predictions, eval_data=evaluation_data)
 
+    def unpack_means(self, means):
+        # Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
+        # Select User and Movie Means into Seperate DFs to join - drop duplicates is necessary
+        user_means = means.select("userId", "user_mean").alias("user_means")
+        user_means = user_means.dropDuplicates()
+        movie_means = means.select(
+            "movieId", "movie_mean").alias("movie_means")
+        movie_means = movie_means.dropDuplicates()
+        return user_means, movie_means
+
+    def format_user_recs(self, userRecs):
+        # Get format for custom/precision / recall
+        recs = userRecs.select("userId", explode(
+            "recommendations").alias("tuple")).select("userId", "tuple.*")
+        # Rename column for clarity
+        recs = recs.withColumnRenamed("rating", "prediction")
+        return recs
+
     def ALS_metrics(self, means, userRecs, regression_predictions, evaluation_data):
         """
         Calculates OTB Ranking Metrics, Custom Precision and Recall, and Non-Ranking Metrics in place
         """
-        # Unpack userRecs, go from userId, list({movieId:predicted_rating}) -> userId, movieId
+        # Unpack Means
+        user_means, movie_means = self.unpack_means(means)
+        # Format recs
+        preds = self.format_user_recs(userRecs)
+        # Undo the normalization for both ranking predictions and regression predictions
+        ranking_predictions = self.ALS_undo_normalization(
+            movie_means=movie_means, user_means=user_means, preds=preds).select("movieId", "userId", "prediction")
+        regression_predictions = self.ALS_undo_normalization(
+            movie_means=movie_means, user_means=user_means, preds=regression_predictions).select("rating", "movieId", "userId", "prediction")
 
-        # Get format for custom/precision / recall
-        preds = userRecs.select("userId", explode(
-            "recommendations").alias("tuple")).select("userId", "tuple.*")
-
-        #Rename column for clarity
-        preds = preds.withColumnRenamed("rating", "prediction")
-
-        #Undo the normalization for both ranking predictions and regression predictions
-        ranking_predictions = self.ALS_undo_normalization(means, preds).select("movieId","userId","prediction")
-        regression_predictions = self.ALS_undo_normalization(means, regression_predictions).select("rating","movieId","userId","prediction")
+        # Print test
         print("ranking prds:")
         ranking_predictions.show()
         print("reg prds:")
@@ -316,27 +333,22 @@ class Model():
 
         # Use self.non_ranking_metrics to compute RMSE, R^2, and ROC of Top 100 Predictions - No special Filtering ATM
         self.non_ranking_metrics(regression_predictions)
-        
 
-    def ALS_undo_normalization(self, means, preds):
-        #Select User and Movie Means into Seperate DFs to join - drop duplicates is necessary
-        user_means = means.select("userId","user_mean").alias("user_means")
-        user_means = user_means.dropDuplicates()
-        movie_means = means.select("movieId","movie_mean").alias("movie_means")
-        movie_means = movie_means.dropDuplicates()
+    def ALS_undo_normalization(self, user_means, movie_means, preds):
+        # Join user_means first, then movie_means
+        preds = preds.join(user_means, "userId", how='left').select(
+            preds['*'], user_means.user_mean)
+        preds = preds.join(movie_means, "movieId", how='left').select(
+            preds['*'], movie_means.movie_mean)
 
-        #Join user_means first, then movie_means
-        preds = preds.join(user_means, "userId",how='left').select(preds['*'],user_means.user_mean)
-        preds = preds.join(movie_means, "movieId",how='left').select(preds['*'],movie_means.movie_mean)
-
-        #For those that don't appear in the predicted movies just have 0
+        # For those that don't appear in the predicted movies just have 0
         preds = preds.withColumn("user_mean", when(
-                    col("user_mean").isNull(), 0).otherwise(col("user_mean")))
+            col("user_mean").isNull(), 0).otherwise(col("user_mean")))
         preds = preds.withColumn("movie_mean", when(
-                    col("movie_mean").isNull(), 0).otherwise(col("movie_mean")))
+            col("movie_mean").isNull(), 0).otherwise(col("movie_mean")))
 
-        #Fix the predictions, un-normalize the predicted ratings score 
-        #Then subtract 2.5 to stay consistent with boolean logic in metric functions
+        # Fix the predictions, un-normalize the predicted ratings score
+        # Then subtract 2.5 to stay consistent with boolean logic in metric functions
         fixed_predictions = preds.withColumn("prediction", col(
             "prediction") - 2.5 + (.5 * (col("movie_mean")+col("user_mean"))))
 
@@ -366,8 +378,9 @@ class Model():
         """
         print("Running OTB Ranking Metrics")
 
-        #Define window spec to grab top 100 reviews - use movieId as tie breaker (especially for baseline)
-        windowSpec = Window.partitionBy('userId').orderBy(col('prediction').desc(),col("movieId"))
+        # Define window spec to grab top 100 reviews - use movieId as tie breaker (especially for baseline)
+        windowSpec = Window.partitionBy('userId').orderBy(
+            col('prediction').desc(), col("movieId"))
         predictions = preds \
             .select('userId', 'movieId', 'prediction', rank().over(windowSpec).alias('rank')) \
             .where(f'rank <= {self.num_recs}') \
@@ -387,17 +400,21 @@ class Model():
 
         # Update Metrics
         self.metrics['MAP'] = rankingMetrics.meanAveragePrecision
-        self.metrics[f'precisionAt{self.num_recs}'] = rankingMetrics.precisionAt(self.num_recs)
-        self.metrics[f'recallAt{self.num_recs}'] = rankingMetrics.recallAt(self.num_recs)
-        self.metrics[f'ndgcAt{self.num_recs}'] = rankingMetrics.ndcgAt(self.num_recs)
+        self.metrics[f'precisionAt{self.num_recs}'] = rankingMetrics.precisionAt(
+            self.num_recs)
+        self.metrics[f'recallAt{self.num_recs}'] = rankingMetrics.recallAt(
+            self.num_recs)
+        self.metrics[f'ndgcAt{self.num_recs}'] = rankingMetrics.ndcgAt(
+            self.num_recs)
 
-        self.metrics[f'precisionAt10'] = rankingMetrics.precisionAt(10)
-        self.metrics[f'recallAt10'] = rankingMetrics.recallAt(10)
-        self.metrics[f'ndgcAt10'] = rankingMetrics.ndcgAt(10)
+        # For Test Set
+        # self.metrics[f'precisionAt10'] = rankingMetrics.precisionAt(10)
+        # self.metrics[f'recallAt10'] = rankingMetrics.recallAt(10)
+        # self.metrics[f'ndgcAt10'] = rankingMetrics.ndcgAt(10)
 
-        self.metrics[f'precisionAt25'] = rankingMetrics.precisionAt(25)
-        self.metrics[f'recallAt25'] = rankingMetrics.recallAt(25)
-        self.metrics[f'ndgcAt25'] = rankingMetrics.ndcgAt(25)
+        # self.metrics[f'precisionAt25'] = rankingMetrics.precisionAt(25)
+        # self.metrics[f'recallAt25'] = rankingMetrics.recallAt(25)
+        # self.metrics[f'ndgcAt25'] = rankingMetrics.ndcgAt(25)
 
     def custom_precision(self, predictions, eval_data) -> None:
         """
@@ -417,7 +434,8 @@ class Model():
         """
         # Make our predictions equal to 1, as all movies are guessed as positive with baseline
         if self.model_type == 'baseline':
-            predictions = predictions.withColumn("prediction", lit(1).cast("double"))
+            predictions = predictions.withColumn(
+                "prediction", lit(1).cast("double"))
         else:
             # Otherwise if we're doing something like an ALS model then we just binarize
             predictions = predictions.withColumn("prediction", when(
@@ -463,12 +481,13 @@ class Model():
         """
         # Make our predictions equal to 1, as all movies are guessed as positive with baseline
         if self.model_type == 'baseline':
-            predictions = predictions.withColumn("prediction", lit(1).cast("double"))
+            predictions = predictions.withColumn(
+                "prediction", lit(1).cast("double"))
         else:
             # Otherwise if we're doing something like an ALS model then we just binarize
             predictions = predictions.withColumn("prediction", when(
                 predictions.prediction > 0, 1).otherwise(0).cast("double"))
-        
+
         # Set up Join
         preds = predictions.alias("preds")
         labels = eval_data.alias("labels")
@@ -487,7 +506,7 @@ class Model():
         # Binarize rating to positive / negative reviews -- make double
         intersection = intersection.withColumn(
             "rating", when(col("rating") > 0, 1).otherwise(0).cast("double"))
-     
+
         # Sum rating column (this gives us TP), sum predicted column (gives us TP + FP)
         intersection = intersection.groupBy("userId").agg(
             sum(col("rating")).alias("TPandFN"), sum(col("prediction")).alias("TP"))
