@@ -116,7 +116,7 @@ class Model():
         print("Eval Data")
         evaluation_data.show()
 
-        
+
         # Check for leakage between the sets
         if self.sanity_check:
             tester = UnitTest()
@@ -356,22 +356,6 @@ class Model():
         self.metrics['R2'] = evaluator.evaluate(
             predictions, {evaluator.metricName: "r2"})
 
-        ##Multi-Class Metric Evaluation##
-        # Make predictions Binary
-        binary_predicts = predictions.withColumn("prediction", when(
-            col("prediction") > 0, 1).otherwise(0).cast("double"))
-        binary_predicts = binary_predicts.withColumn("rating", when(
-            col("rating") > 0, 1).otherwise(0).cast("double"))
-
-        predictionAndLabels = binary_predicts.select("prediction","rating").rdd
-        metrics = MulticlassMetrics(predictionAndLabels)
-
-        #Calculate weighted Precision, Recall, F1, and FP rate
-        self.metrics["weightedRecall"] = metrics.weightedRecall
-        self.metrics["weightedPrecision"] = metrics.weightedPrecision
-        self.metrics["weightedFMeasure"] = metrics.weightedFMeasure()
-        
-
     def OTB_ranking_metrics(self, preds, labels):
         """
         Calculates MAP, Precistion at K, Recall at K, NDGC at K in place and saves outputs
@@ -406,6 +390,14 @@ class Model():
         self.metrics[f'precisionAt{self.num_recs}'] = rankingMetrics.precisionAt(self.num_recs)
         self.metrics[f'recallAt{self.num_recs}'] = rankingMetrics.recallAt(self.num_recs)
         self.metrics[f'ndgcAt{self.num_recs}'] = rankingMetrics.ndcgAt(self.num_recs)
+
+        self.metrics[f'precisionAt10'] = rankingMetrics.precisionAt(10)
+        self.metrics[f'recallAt10'] = rankingMetrics.recallAt(10)
+        self.metrics[f'ndgcAt10'] = rankingMetrics.ndcgAt(10)
+
+        self.metrics[f'precisionAt25'] = rankingMetrics.precisionAt(25)
+        self.metrics[f'recallAt25'] = rankingMetrics.recallAt(25)
+        self.metrics[f'ndgcAt25'] = rankingMetrics.ndcgAt(25)
 
     def custom_precision(self, predictions, eval_data) -> None:
         """
