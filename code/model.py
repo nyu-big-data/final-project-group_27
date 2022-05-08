@@ -308,19 +308,26 @@ class Model():
         """
         # Unpack Means
         user_means, movie_means = self.unpack_means(means)
+
+        ## Testing to see if aliasing helps the error
+        user_means_2 = user_means.alias("user_means_2")
+        movie_means_2 = movie_means.alias("movie_means_2")
+
         # Format recs
         preds = self.format_user_recs(userRecs)
+
         # Undo the normalization for both ranking predictions and regression predictions
         ranking_predictions = self.ALS_undo_normalization(
             movie_means=movie_means, user_means=user_means, preds=preds).select("movieId", "userId", "prediction")
         regression_predictions = self.ALS_undo_normalization(
-            movie_means=movie_means, user_means=user_means, preds=regression_predictions).select("rating", "movieId", "userId", "prediction")
+            movie_means=movie_means_2, user_means=user_means_2, preds=regression_predictions).select("rating", "movieId", "userId", "prediction")
 
         # Print test
         print("ranking prds:")
         ranking_predictions.show()
         print("reg prds:")
         regression_predictions.show()
+        
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
         self.OTB_ranking_metrics(
             preds=ranking_predictions, labels=evaluation_data)
