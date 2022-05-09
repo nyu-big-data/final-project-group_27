@@ -111,10 +111,6 @@ class Model():
         elif test:
             self.evaluation_data_name = "Test"
             evaluation_data = test
-        print("Train data:")
-        train.show()
-        print("Eval Data")
-        evaluation_data.show()
 
         # Check for leakage between the sets
         if self.sanity_check:
@@ -309,7 +305,7 @@ class Model():
         # Unpack Means
         user_means, movie_means = self.unpack_means(means)
 
-        ## Testing to see if aliasing helps the error
+        # Testing to see if aliasing helps the error
         user_means_2 = user_means.alias("user_means_2")
         movie_means_2 = movie_means.alias("movie_means_2")
 
@@ -319,14 +315,9 @@ class Model():
         # Undo the normalization for both ranking predictions and regression predictions
         ranking_predictions = self.ALS_undo_normalization(
             movie_means=movie_means, user_means=user_means, preds=preds).select("movieId", "userId", "prediction")
+
         regression_predictions = self.ALS_undo_normalization(
             movie_means=movie_means_2, user_means=user_means_2, preds=regression_predictions).select("rating", "movieId", "userId", "prediction")
-
-        # Print test
-        print("ranking prds:")
-        ranking_predictions.show()
-        print("reg prds:")
-        regression_predictions.show()
 
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
         self.OTB_ranking_metrics(
@@ -398,7 +389,7 @@ class Model():
             .select('userId', 'movieId')\
             .groupBy('userId') \
             .agg(expr('collect_list(movieId) as movieId'))
-        
+
         print("Creating Predictions and Labels")
         predictionsAndLabels = predictions.join(broadcast(labels), 'userId', 'inner') \
             .rdd \
