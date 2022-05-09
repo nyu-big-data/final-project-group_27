@@ -61,8 +61,9 @@ if __name__ == '__main__':
     model_size = sys.argv[1]
     ranks_start = int(sys.argv[2])
     ranks_stop = int(sys.argv[3])
+    step = int(sys.argv[4])
 
-    ranks = range(ranks_start, ranks_stop, 2)
+    ranks = range(ranks_start, ranks_stop+step, step)
 
     # Make sure input is valid
     if model_size not in ['small', 'large']:
