@@ -24,30 +24,31 @@ def main(spark, model_size, ranks):
     
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
     # regParams = np.logspace(-3,-1,5)
-    regParams = 0.1
+    regParam = 0.1
     for rank in ranks:
-        for regParam in regParams:
-            print(f"Running Model: Max Iter:{10}, Rank: {rank}, Reg Param: {regParam}")
-            # Pass through dictionary of keyword arguments to Model()
-            reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = 10,regParam = float(regParam))
-            # Run the model
-            reccomender_system.run_model(train, val)
+    
+        print(f"Running Model: Max Iter:{10}, Rank: {rank}, Reg Param: {regParam}")
+        # Pass through dictionary of keyword arguments to Model()
+        reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = 10,regParam = float(regParam))
+        # Run the model
+        reccomender_system.run_model(train, val)
 
-            #Grab the key:value pairs of instance variables
-            instance_vars = vars(reccomender_system)
-            print(f'instance vars: {instance_vars}')
-            #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
-            del instance_vars["methods"]
+        #Grab the key:value pairs of instance variables
+        instance_vars = vars(reccomender_system)
+        print(f'instance vars: {instance_vars}')
+        #Get rid of "methods" nested dict - it has the function calls which can't be written to output file
+        del instance_vars["methods"]
+        del reccomender_system
+        
+        print("Writing results")
+        # Write our results and model parameters
+        print("Recording the model_params")
+        with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
+            output_file.write(json.dumps(instance_vars))
+            output_file.write("\n")
 
-            print("Writing results")
-            # Write our results and model parameters
-            print("Recording the model_params")
-            with open(const.RESULTS_SAVE_FILE_PATH, 'a') as output_file:
-                output_file.write(json.dumps(instance_vars))
-                output_file.write("\n")
-
-            #Clear anything thats cached
-            spark.catalog.clearCache()
+        #Clear anything thats cached
+        spark.catalog.clearCache()
 
 # Enter this block if we're in __main__
 if __name__ == '__main__':
