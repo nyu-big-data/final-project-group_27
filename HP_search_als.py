@@ -60,7 +60,7 @@ if __name__ == '__main__':
     ranks_start = int(sys.argv[2])
     ranks_stop = int(sys.argv[3])
 
-    ranks = range(ranks_start, ranks_stop, step=2)
+    ranks = range(ranks_start, ranks_stop, 2)
 
     # Make sure input is valid
     if model_size not in ['small', 'large']:
