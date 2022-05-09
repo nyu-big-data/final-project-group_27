@@ -23,7 +23,8 @@ def main(spark, model_size, ranks):
 
     
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
-    regParams = np.logspace(-3,-1,5)
+    # regParams = np.logspace(-3,-1,5)
+    regParams = 0.1
     for rank in ranks:
         for regParam in regParams:
             print(f"Running Model: Max Iter:{10}, Rank: {rank}, Reg Param: {regParam}")
