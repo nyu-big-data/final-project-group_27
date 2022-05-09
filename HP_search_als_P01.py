@@ -24,12 +24,12 @@ def main(spark, model_size, ranks):
     
     #Iterate over K values - Calculate Baseline Model and Search for best K on val performance
     # regParams = np.logspace(-3,-1,5)
-    regParam = 0.1
+    
     for rank in ranks:
     
-        print(f"Running Model: Max Iter:{10}, Rank: {rank}, Reg Param: {regParam}")
+        print(f"Running Model: Max Iter:{10}, Rank: {rank}, Reg Param: {0.01}")
         # Pass through dictionary of keyword arguments to Model()
-        reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = 10,regParam = float(regParam))
+        reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = 10,regParam = 0.01)
         # Run the model
         reccomender_system.run_model(train, val)
 
