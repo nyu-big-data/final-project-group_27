@@ -327,7 +327,7 @@ class Model():
         ranking_predictions.show()
         print("reg prds:")
         regression_predictions.show()
-        
+
         # Use self.record_metrics to evaluate model on Precision at K, Mean Precision, and NDGC
         self.OTB_ranking_metrics(
             preds=ranking_predictions, labels=evaluation_data)
@@ -398,19 +398,25 @@ class Model():
             .select('userId', 'movieId')\
             .groupBy('userId') \
             .agg(expr('collect_list(movieId) as movieId'))
-
+        
+        print("Creating Predictions and Labels")
         predictionsAndLabels = predictions.join(broadcast(labels), 'userId', 'inner') \
             .rdd \
             .map(lambda row: (row[1], row[2]))
 
         rankingMetrics = RankingMetrics(predictionsAndLabels)
 
+        print("Calculating MAP")
         # Update Metrics
         self.metrics['MAP'] = rankingMetrics.meanAveragePrecision
+
+        print("Calculating Precision")
         self.metrics[f'precisionAt{self.num_recs}'] = rankingMetrics.precisionAt(
             self.num_recs)
+        print("Calculating Recall")
         self.metrics[f'recallAt{self.num_recs}'] = rankingMetrics.recallAt(
             self.num_recs)
+        print("Calculating NDGC")
         self.metrics[f'ndgcAt{self.num_recs}'] = rankingMetrics.ndcgAt(
             self.num_recs)
 
