@@ -9,7 +9,7 @@ import numpy as np
 # Main Function that will define model behavior
 
 
-def main(spark, model_size, ranks, regParam):
+def main(spark, model_size, ranks, regParam, maxIter):
 
     # Grab the filepaths for model_size
     train_file_path = f"{const.HPC_DATA_FILEPATH}als-{model_size}-train.csv"
@@ -27,9 +27,9 @@ def main(spark, model_size, ranks, regParam):
     
     for rank in ranks:
     
-        print(f"Running Model: Max Iter:{25}, Rank: {rank}, Reg Param: {regParam}")
+        print(f"Running Model: Max Iter:{maxIter}, Rank: {rank}, Reg Param: {regParam}")
         # Pass through dictionary of keyword arguments to Model()
-        reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = 25,regParam = regParam)
+        reccomender_system = Model(model_size=model_size, model_type='als', rank=int(rank), maxIter = maxIter,regParam = regParam)
         # Run the model
         reccomender_system.run_model(train, val)
 
@@ -63,6 +63,7 @@ if __name__ == '__main__':
     ranks_stop = int(sys.argv[3])
     step = int(sys.argv[4])
     exp = int(sys.argv[5])
+    maxIter = int(sys.argv[6])
     regParam = 10**(-exp)
     ranks = range(ranks_start, ranks_stop+step, step)
 
@@ -70,4 +71,4 @@ if __name__ == '__main__':
     if model_size not in ['small', 'large']:
         raise Exception(f"Model Size must either be 'small' or 'large', you entered {model_size}")
     #Call Main
-    main(spark, model_size, ranks, regParam)
+    main(spark, model_size, ranks, regParam, maxIter)
