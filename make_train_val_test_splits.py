@@ -31,12 +31,12 @@ def main(spark, dataset_size, model_type):
 
     # Output Train/Test/Val Splits into Data_partitions
     print(f"Saving train/val/test splits to {const.HPC_DATA_FILEPATH}")
-    train.write.csv(
-        f"{const.HPC_DATA_FILEPATH}{model_type}-{dataset_size}-train.csv", mode="overwrite")
-    val.write.csv(
-        f"{const.HPC_DATA_FILEPATH}{dataset_size}-val.csv", mode="overwrite")
-    test.write.csv(
-        f"{const.HPC_DATA_FILEPATH}{dataset_size}-test.csv", mode="overwrite")
+    train.write.parquet(
+        f"{const.HPC_DATA_FILEPATH}{model_type}-{dataset_size}-train.parquet", mode="overwrite")
+    val.write.parquet(
+        f"{const.HPC_DATA_FILEPATH}{dataset_size}-val.parquet", mode="overwrite")
+    test.write.parquet(
+        f"{const.HPC_DATA_FILEPATH}{dataset_size}-test.parquet", mode="overwrite")
 
     # Let us know when done
     print("Finished Saving")
