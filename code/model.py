@@ -124,10 +124,10 @@ class Model():
         # Grab method for whichever model corresponds to self.model_type
         model = self.methods[self.model_type]
         # Run model on training / evaluation data
-        model(train, evaluation_data)
+        model_output = model(train, evaluation_data)
         # return model_output
         if self.save_model == 1:
-            self.save_model(model=model)
+            self.save_model(model=model_output)
 
     # This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def alternatingLeastSquares(self, training, evaluation_data):
@@ -174,7 +174,7 @@ class Model():
                          regression_predictions=regression_predictions, evaluation_data=evaluation_data)
 
         # Return top self.num_recs movie recs for each user
-        # return userRecs
+        return model
 
     # Baseline model that returns top X most popular items (highest avg rating)
     def baseline(self, training, evaluation_data):
