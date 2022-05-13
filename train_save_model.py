@@ -30,7 +30,7 @@ def main(spark, model_size, model_type, rank,maxIter,regParam):
                   itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
 
     als = als.fit(train)
-    als.save(const.MODEL_SAVE_FILE_PATH+f"{model_size}-{rank}-{maxIter}-{regParam}")
+    als.save(const.HPC_DATA_FILEPATH+f"Model-{model_size}-{rank}-{maxIter}-{regParam}")
 
 # Enter this block if we're in __main__
 if __name__ == '__main__':
