@@ -48,9 +48,9 @@ if __name__ == '__main__':
     # Define the model type in second argument:
     model_type = sys.argv[2]
     # Model Args:
-    rank = sys.argv[3]
-    maxIter = sys.argv[3]
-    regParam = sys.argv[3]
+    rank = int(sys.argv[3])
+    maxIter = int(sys.argv[3])
+    regParam = float(sys.argv[3])
 
     # Make sure input is valid
     if model_size not in ['small', 'large']:
