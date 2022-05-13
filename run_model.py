@@ -27,6 +27,8 @@ def main(spark, model_size, model_type, model_args):
     val = spark.read.parquet(val_file_path)
                         #  schema=const.VAL_TEST_SCHEMA)
 
+    train = train.repartition(40)
+    test = test.repartition(40)
     # Pass through dictionary of keyword arguments to Model()
     reccomender_system = Model(model_size=model_size, model_type=model_type, **model_args)
     # Run the model
