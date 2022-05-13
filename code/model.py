@@ -124,10 +124,8 @@ class Model():
         # Grab method for whichever model corresponds to self.model_type
         model = self.methods[self.model_type]
         # Run model on training / evaluation data
-        model_output = model(train, evaluation_data)
-        # return model_output
-        if self.save_model == 1:
-            self.save_model(model=model_output)
+        model(train, evaluation_data)
+     
 
     # This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def alternatingLeastSquares(self, training, evaluation_data):
@@ -173,8 +171,11 @@ class Model():
         self.ALS_metrics(means=means, userRecs=userRecs,
                          regression_predictions=regression_predictions, evaluation_data=evaluation_data)
 
+        if self.save_model == 1:
+            model.save(const.MODEL_SAVE_FILE_PATH+f"{self.model_size}-{self.rank}-{self.maxIter}")
+
         # Return top self.num_recs movie recs for each user
-        return model
+        # return userRecs
 
     # Baseline model that returns top X most popular items (highest avg rating)
     def baseline(self, training, evaluation_data):
@@ -523,7 +524,3 @@ class Model():
         # Return mean recall across all userIds
         self.metrics["Custom Recall"] = intersection.select(
             "recall").agg({"recall": "avg"}).collect()[0][0]
-
-    def save_model(self,model):
-        if self.model_type == 'als':
-            model.save(const.MODEL_SAVE_FILE_PATH+self.model_size+"r"+self.rank+"i"+self.maxIter)
