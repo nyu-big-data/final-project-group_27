@@ -393,7 +393,7 @@ class Model():
             .agg(expr('collect_list(movieId) as movieId'))
 
         print("Creating Predictions and Labels")
-        predictionsAndLabels = predictions.join(labels, 'userId', 'inner') \
+        predictionsAndLabels = predictions.join(broadcast(labels), 'userId', 'inner') \
             .rdd \
             .map(lambda row: (row[1], row[2]))
 
