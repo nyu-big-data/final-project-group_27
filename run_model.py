@@ -11,24 +11,35 @@ def main(spark, model_size, model_type, model_args):
     
     print(f"Filepath: {const.HPC_DATA_FILEPATH}{model_size}")
     # Grab the filepaths for model_size
-    train_file_path = f"{const.HPC_DATA_FILEPATH}{model_type}-{model_size}-train.parquet" #Depends on what model we want - ALS includes more preprocessing
-    test_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-test.parquet"
-    val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.parquet"
+    train_file_path = f"{const.HPC_DATA_FILEPATH}{model_type}-{model_size}-train.csv" #Depends on what model we want - ALS includes more preprocessing
+    test_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-test.csv"
+    val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
     
-    # Read data for file paths
-    if model_type == 'als':
-        train = spark.read.parquet(train_file_path)
-                            # schema=const.ALS_TRAIN_SCHEMA)
-    else:
-        train = spark.read.parquet(train_file_path)
-                        #   schema=const.VAL_TEST_SCHEMA )
-    test = spark.read.parquet(test_file_path)
-                        #   schema=const.VAL_TEST_SCHEMA)
-    val = spark.read.parquet(val_file_path)
-                        #  schema=const.VAL_TEST_SCHEMA)
+    # # Read data for file paths
+    # if model_type == 'als':
+    #     train = spark.read.parquet(train_file_path)
+    #                         # schema=const.ALS_TRAIN_SCHEMA)
+    # else:
+    #     train = spark.read.parquet(train_file_path)
+    #                     #   schema=const.VAL_TEST_SCHEMA )
+    # test = spark.read.parquet(test_file_path)
+    #                     #   schema=const.VAL_TEST_SCHEMA)
+    # val = spark.read.parquet(val_file_path)
+    #                     #  schema=const.VAL_TEST_SCHEMA)
+        # Read data for file paths
 
-    train = train.repartition(40)
-    test = test.repartition(40)
+    if model_type == 'als':
+        train = spark.read.csv(train_file_path,
+                            schema=const.ALS_TRAIN_SCHEMA)
+    else:
+        train = spark.read.csv(train_file_path,
+                          schema=const.VAL_TEST_SCHEMA )
+    test = spark.read.csv(test_file_path,
+                        schema=const.VAL_TEST_SCHEMA)
+    val = spark.read.csv(val_file_path,
+                        schema=const.VAL_TEST_SCHEMA)
+
+
     # Pass through dictionary of keyword arguments to Model()
     reccomender_system = Model(model_size=model_size, model_type=model_type, **model_args)
     # Run the model
