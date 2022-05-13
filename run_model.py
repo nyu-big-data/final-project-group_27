@@ -17,15 +17,15 @@ def main(spark, model_size, model_type, model_args):
     
     # Read data for file paths
     if model_type == 'als':
-        train = spark.read.parquet(train_file_path,
-                            schema=const.ALS_TRAIN_SCHEMA)
+        train = spark.read.parquet(train_file_path)
+                            # schema=const.ALS_TRAIN_SCHEMA)
     else:
-        train = spark.read.parquet(train_file_path,
-                          schema=const.VAL_TEST_SCHEMA)
-    test = spark.read.parquet(test_file_path,
-                          schema=const.VAL_TEST_SCHEMA)
-    val = spark.read.parquet(val_file_path,
-                         schema=const.VAL_TEST_SCHEMA)
+        train = spark.read.parquet(train_file_path)
+                        #   schema=const.VAL_TEST_SCHEMA )
+    test = spark.read.parquet(test_file_path)
+                        #   schema=const.VAL_TEST_SCHEMA)
+    val = spark.read.parquet(val_file_path)
+                        #  schema=const.VAL_TEST_SCHEMA)
 
     # Pass through dictionary of keyword arguments to Model()
     reccomender_system = Model(model_size=model_size, model_type=model_type, **model_args)
