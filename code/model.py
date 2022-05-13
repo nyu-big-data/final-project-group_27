@@ -53,7 +53,7 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 num_recs=100, min_ratings=None, bias=None, positive_rating_threshold=0, k=100, sanity_check=None):
+                 num_recs=100, min_ratings=None, bias=None, positive_rating_threshold=0, k=100, sanity_check=None, save_model=0):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         # Dictionary to access variable methods
@@ -73,7 +73,7 @@ class Model():
         self.rank = rank  # Rank of latent factors used in decomposition
         self.maxIter = maxIter  # Number of iterations to run algorithm, recommended 5-20
         self.regParam = regParam  # Regularization Parameter
-
+        self.save_model = save_model
         # For baseline
         # Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
         self.min_ratings = min_ratings
@@ -126,6 +126,8 @@ class Model():
         # Run model on training / evaluation data
         model(train, evaluation_data)
         # return model_output
+        if self.save_model == 1:
+            self.save_model(model=model)
 
     # This method uses the Alternating Least Squares Pyspark Class to fit and run a model
     def alternatingLeastSquares(self, training, evaluation_data):
@@ -521,3 +523,7 @@ class Model():
         # Return mean recall across all userIds
         self.metrics["Custom Recall"] = intersection.select(
             "recall").agg({"recall": "avg"}).collect()[0][0]
+
+    def save_model(self,model):
+        if self.model_type == 'als':
+            model.save(const.MODEL_SAVE_FILE_PATH+self.model_size+"r"+self.rank+"i"+self.maxIter)
