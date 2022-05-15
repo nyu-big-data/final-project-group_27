@@ -13,18 +13,10 @@ def main(spark, model_size, model_type, rank,maxIter,regParam):
     print(f"Filepath: {const.HPC_DATA_FILEPATH}{model_size}")
     # Grab the filepaths for model_size
     train_file_path = f"{const.HPC_DATA_FILEPATH}{model_type}-{model_size}-train.csv" #Depends on what model we want - ALS includes more preprocessing
-    test_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-test.csv"
-    val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
     
-
     train = spark.read.csv(train_file_path,
                             schema=const.ALS_TRAIN_SCHEMA)
-    test = spark.read.csv(test_file_path,
-                        schema=const.VAL_TEST_SCHEMA)
-    val = spark.read.csv(val_file_path,
-                        schema=const.VAL_TEST_SCHEMA)
-
-
+                            
     als = ALS(maxIter=maxIter, rank=rank, regParam=regParam,
                   nonnegative=False, seed=10, userCol="userId",
                   itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
