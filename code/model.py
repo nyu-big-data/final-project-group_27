@@ -73,7 +73,7 @@ class Model():
         self.rank = rank  # Rank of latent factors used in decomposition
         self.maxIter = maxIter  # Number of iterations to run algorithm, recommended 5-20
         self.regParam = regParam  # Regularization Parameter
-        self.save_model = save_model
+        self.save_model = int(save_model)
         # For baseline
         # Minimum number of reviews to qualify for baseline (Greater Than or Equal to be included)
         self.min_ratings = min_ratings
@@ -172,7 +172,7 @@ class Model():
                          regression_predictions=regression_predictions, evaluation_data=evaluation_data)
 
         if self.save_model == 1:
-            model.save(const.MODEL_SAVE_FILE_PATH+f"{self.model_size}-{self.rank}-{self.maxIter}")
+            model.save(const.HPC_DATA_FILEPATH+f"{self.model_size}-{self.rank}-{self.maxIter}")
 
         # Return top self.num_recs movie recs for each user
         # return userRecs
