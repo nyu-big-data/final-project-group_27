@@ -19,7 +19,7 @@ def main(spark, model_size, model_type, rank,maxIter,regParam):
                             
     als = ALS(maxIter=maxIter, rank=rank, regParam=regParam,
                   nonnegative=False, seed=10, userCol="userId",
-                  itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
+                  itemCol="movieId", ratingCol="rating", coldStartStrategy="drop", checkpointInterval=25)
 
     als = als.fit(train)
     als.save(const.HPC_DATA_FILEPATH+f"Model-{model_size}-{rank}-{maxIter}-{regParam}")
