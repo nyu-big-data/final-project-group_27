@@ -53,10 +53,11 @@ class Model():
 
     # Constructor for Model
     def __init__(self, model_size=None, model_type=None, rank=None, maxIter=None, regParam=None,
-                 num_recs=100, min_ratings=None, bias=None, positive_rating_threshold=0, k=100, sanity_check=None, save_model=0):
+                 num_recs=100, min_ratings=None, bias=None, positive_rating_threshold=0, k=100, sanity_check=None, save_model=0, checkpointInterval=0):
         # Model Attributes
         # NO Arg needed to be passed thorugh
         # Dictionary to access variable methods
+        self.checkpointInterval = checkpointInterval
         self.netId = const.netID
         self.methods = {"als": self.alternatingLeastSquares,
                         "baseline": self.baseline}
@@ -148,7 +149,7 @@ class Model():
         # Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
         als = ALS(maxIter=self.maxIter, rank=self.rank, regParam=self.regParam,
                   nonnegative=False, seed=10, userCol="userId",
-                  itemCol="movieId", ratingCol="rating", coldStartStrategy="drop")
+                  itemCol="movieId", ratingCol="rating", coldStartStrategy="drop", checkpointInterval=self.checkpointInterval)
 
         # Fit the model
         model = als.fit(training)
