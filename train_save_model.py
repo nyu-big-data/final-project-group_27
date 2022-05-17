@@ -1,4 +1,5 @@
 from pyspark.sql import SparkSession
+from pyspark import SparkContext
 from code.model import Model
 import code.constants as const
 import sys
@@ -16,10 +17,13 @@ def main(spark, model_size, model_type, rank,maxIter,regParam):
     
     train = spark.read.csv(train_file_path,
                             schema=const.ALS_TRAIN_SCHEMA)
-                            
+
+    #Try setting checkpoint dir
+    SparkContext.setCheckpointDir(const.CHECKPOINT_DIR)
+
     als = ALS(maxIter=maxIter, rank=rank, regParam=regParam,
                   nonnegative=False, seed=10, userCol="userId",
-                  itemCol="movieId", ratingCol="rating", coldStartStrategy="drop", checkpointInterval=25)
+                  itemCol="movieId", ratingCol="rating", coldStartStrategy="drop", checkpointInterval=5, numItemBlocks=50, numUserBlocks=50)
 
     als = als.fit(train)
     als.save(const.HPC_DATA_FILEPATH+f"Model-{model_size}-{rank}-{maxIter}-{regParam}")
