@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark import SparkContext
+from pyspark import SparkContext, SparkConf
 from code.model import Model
 import code.constants as const
 import sys
@@ -17,9 +17,6 @@ def main(spark, model_size, model_type, rank,maxIter,regParam):
     
     train = spark.read.csv(train_file_path,
                             schema=const.ALS_TRAIN_SCHEMA)
-
-    #Try setting checkpoint dir
-    SparkContext.setCheckpointDir(dirName=const.CHECKPOINT_DIR)
 
     als = ALS(maxIter=maxIter, rank=rank, regParam=regParam,
                   nonnegative=False, seed=10, userCol="userId",
@@ -39,6 +36,9 @@ if __name__ == '__main__':
     """
     # Initialize spark context
     spark = SparkSession.builder.appName('Proj').getOrCreate()
+    sc = SparkContext.getOrCreate(SparkConf())
+    sc.setCheckpointDir(dirName=const.CHECKPOINT_DIR)
+    
     # Model size is either "small" or "large"
     model_size = sys.argv[1]
     # Define the model type in second argument:
