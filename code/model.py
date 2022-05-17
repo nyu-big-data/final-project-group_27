@@ -149,7 +149,8 @@ class Model():
         # Create the model with certain params - coldStartStrategy="drop" means that we'll have no nulls in val / test set
         als = ALS(maxIter=self.maxIter, rank=self.rank, regParam=self.regParam,
                   nonnegative=False, seed=10, userCol="userId",
-                  itemCol="movieId", ratingCol="rating", coldStartStrategy="drop", checkpointInterval=self.checkpointInterval)
+                  itemCol="movieId", ratingCol="rating", coldStartStrategy="drop", checkpointInterval=self.checkpointInterval,
+                  numUserBlocks=100,numItemBlocks=100)
 
         # Fit the model
         model = als.fit(training)
