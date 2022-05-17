@@ -19,7 +19,7 @@ def main(spark, model_size, model_type, rank,maxIter,regParam):
                             schema=const.ALS_TRAIN_SCHEMA)
 
     #Try setting checkpoint dir
-    SparkContext.setCheckpointDir(const.CHECKPOINT_DIR)
+    SparkContext.setCheckpointDir(dirName=const.CHECKPOINT_DIR)
 
     als = ALS(maxIter=maxIter, rank=rank, regParam=regParam,
                   nonnegative=False, seed=10, userCol="userId",
