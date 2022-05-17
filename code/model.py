@@ -150,7 +150,7 @@ class Model():
         als = ALS(maxIter=self.maxIter, rank=self.rank, regParam=self.regParam,
                   nonnegative=False, seed=10, userCol="userId",
                   itemCol="movieId", ratingCol="rating", coldStartStrategy="drop", checkpointInterval=self.checkpointInterval,
-                  numUserBlocks=100,numItemBlocks=100)
+                  numUserBlocks=50,numItemBlocks=50)
 
         # Fit the model
         model = als.fit(training)
