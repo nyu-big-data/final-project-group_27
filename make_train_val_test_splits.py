@@ -1,5 +1,4 @@
 # Import a bunch of things
-from xml.parsers.expat import model
 from code.preprocess import DataPreprocessor
 import code.constants as const
 import sys

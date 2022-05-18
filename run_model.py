@@ -17,7 +17,7 @@ def main(spark, model_size, model_type, model_args):
     val_file_path = f"{const.HPC_DATA_FILEPATH}{model_size}-val.csv"
     
     #Try setting checkpoint dir
-    SparkContext.setCheckpointDir(const.CHECKPOINT_DIR)
+    SparkContext.setCheckpointDir(dirName=const.CHECKPOINT_DIR)
 
     if model_type == 'als':
         train = spark.read.csv(train_file_path,
